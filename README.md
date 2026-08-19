@@ -1,6 +1,4 @@
-# Projeto-Web3-Cartaxo
-
-## Sistema de Clínica Otorrino e Fono
+# Sistema para Clínica de Otorrinolaringologia e Fonoaudiologia
 
 ### Integrantes
 
@@ -11,62 +9,45 @@
 * Heder Matheus
 * Helmer Barcelos
 
-### Descrição do Projeto
+## Funcionalidades do Sistema
 
-### Lista de Funcionalidades (A definir)
+- **Gestão de Pacientes e Prontuários**: Cadastro completo, histórico médico e anamnese eletrônica. Inclui prontuários especializados com componentes interativos para preenchimento de audiogramas e curvas timpanométricas.
+- **Gestão de Profissionais**: Cadastro de médicos otorrinolaringologistas, fonoaudiólogos e equipe administrativa, com controle dinâmico de agendas.
+- **Agendamento e Financeiro**: Marcação, remarcação e cancelamento de consultas/exames em tempo real, integrado a um módulo completo de faturamento.
+- **Evolução Multimídia**: Upload e armazenamento seguro (via AWS S3) de gravações de voz e vídeos curtos, permitindo aos fonoaudiólogos comparar visualmente e auditivamente o "antes e depois" do tratamento.
+- **Portal do Paciente com Gamificação**: Área exclusiva para visualização de histórico, download de receitas, reagendamentos e integração com telemedicina. Inclui um módulo gamificado onde os pacientes marcam a conclusão de exercícios vocais prescritos, acumulando "ofensivas" de engajamento.
+- **Assistência por Inteligência Artificial**: Integração com modelo open-source (Whisper/Python) para transcrever automaticamente os áudios das consultas para o campo de anamnese do sistema.
+- **Comunicação Integrada**: Envio de notificações e lembretes automatizados aos pacientes.
 
-- Gestão de Pacientes: Cadastro completo, histórico médico, anamnese e consulta a prontuários eletrônicos.
-- Gestão de Profissionais de Saúde: Cadastro de médicos otorrinolaringologistas, fonoaudiólogos e equipe administrativa com controle de agendas.
-- Agendamento de Consultas e Exames: Marcação, remarcação, cancelamento e visualização de horários disponíveis.
--
--
+## Tecnologias Usadas
 
-## Tecnologias Pretendidas
+| Categoria | Tecnologias |
+|---|---|
+| Frontend | HTML5, CSS3, JavaScript, React (SPA), Tailwind CSS |
+| Backend | Python via FastAPI (Microsserviços) |
+| Bancos de Dados | PostgreSQL (uma instância por serviço) |
+| Cache e Sessão | Redis |
+| Infraestrutura e Cloud | Docker, Docker Compose, AWS (EC2, S3) |
+| Observabilidade | Prometheus, Grafana, OpenTelemetry |
+| CI/CD e Qualidade | GitHub Actions, Pytest |
 
-- **Frontend**: HTML5, CSS3, JavaScript
-- **Framework (A definir): React (SPA) ou Tailwind CSS para garantia de interface web responsiva.**
-- **Backend:** Python com Django / FastAPI (divididos por microsserviços).
-- **Banco de Dados:** PostgreSQL (uma instância por microsserviço).
-- **Cache & Sessão:** Redis.
-- **Conteinerização:** Docker e Docker Compose.
-- **Testes:** Pytest.
-- **Cloud Provider:** AWS (EC2, S3, RDS).
-- **CI/CD:** GitHub Actions.
-- **Observabilidade (A definir):** Prometheus + Grafana ou AWS CloudWatch para monitoramento e métricas.
+## Arquitetura de Software
 
-## Arquitetura
+O sistema adota uma arquitetura orientada a Microsserviços, desenhada sob as diretrizes do Domain-Driven Design (DDD) para focar em agregados, entidades e serviços de domínio.
 
-A arquitetura do sistema é orientada a Microsserviços, com separação de responsabilidades e comunicação entre serviços via APIs REST e mensageria/eventos:
+- **API Gateway**: Ponto único de entrada e roteamento para os serviços internos.
+- **Domínios**: Divididos em "Serviço de Autenticação/Usuários" e "Serviço de Agendamento/Consultas".
+- **Comunicação Síncrona**: Interações diretas entre serviços via REST/HTTP utilizando FastAPI.
+- **Comunicação Assíncrona**: Processamento em background e eventos geridos por mensageria com RabbitMQ.
+- **Persistência de Dados**: Cada microsserviço possui seu próprio banco PostgreSQL, reduzindo o acoplamento e otimizando a performance em conjunto com o Redis.
 
-- **Domínios (A definir):**
-  - *Serviço de Autenticação e Usuários*
-  - *Serviço de Agendamento e Consultas*
-- **Comunicação (A definir):** REST/HTTP (JSON) e/ou mensageria/eventos (RabbitMQ, Kafka, etc.).
-- Persistência de Dados: Cada domínio possui seu próprio banco de dados PostgreSQL, integrado a uma camada de cache via Redis para otimização de performance.
+## Práticas de Engenharia e Qualidade
 
-## Práticas de Testes
+O ciclo de desenvolvimento seguira os seguintes princípios:
 
-- Testes Unitários:
-- Testes de Integração:
-- Testes de API / End-to-End (E2E):
-- Cobertura de Código (Code Coverage):
-
-## Práticas de DevOps, Conteinerização e Cloud
-
-- Conteinerização
-- Pipeline de CI/CD (GitHub Actions)
-- Cloud (AWS)
-- Observabilidade
-
-## Práticas de Controle de Versão
-
-- Estratégia de Branching:
-  - `main`: Código estável, testado e pronto para produção.
-  - `develop`: Código em ambiente de integração.
-  - `feature/nome-da-feature`: Branchs temporárias para o desenvolvimento de novas funcionalidades.
-- Code Review & Pull Requests (PRs): Nenhuma alteração entra nas branchs principais sem passar por *Pull Request* e aprovação prévia de pelo menos um integrante da equipe.
-- Commits Padronizados: Mensagens claras e estruturadas seguindo a convenção *Conventional Commits* (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`).
-
-## Demais Práticas de Engenharia de Software, Produto & UX (A definir)
-- Clean Code & Princípios SOLID: Aplicação de boas práticas de programação para manter o código legível, modular e testável.
-- **Gestão Ágil: Organização de tarefas, *backlog* e acompanhamento de entregas por meio de quadros Kanban (GitHub Projects). (A definir)**
+- **Garantia de Qualidade (QA)**: Implementação de Testes Unitários, de Integração e End-to-End (E2E), com monitoramento constante da Cobertura de Código.
+- **DevOps e Integração Contínua**: Uso de contêineres para padronização de ambientes e GitHub Actions para esteiras automatizadas de CI/CD.
+- **Controle de Versão**: Fluxo baseado em branchs com main (produção), develop (integração) e feature/ (desenvolvimento).
+- **Revisão de Código**: Nenhuma alteração é mesclada sem um Pull Request aprovado e commits seguindo o padrão Conventional Commits.
+- **Padrões de Projeto**: Escrita baseada em Clean Code e princípios SOLID para garantir um sistema modular e testável.
+- **Gestão Ágil**: Acompanhamento de backlog e entregas utilizando quadros Kanban no GitHub Projects, aplicando tambem cerimônias e técnicas do framework Scrum.
