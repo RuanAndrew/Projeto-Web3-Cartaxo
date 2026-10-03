@@ -1,0 +1,269 @@
+services:
+  auth-db:
+    image: postgres:16-alpine
+    container_name: auth-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${AUTH_DB_USER:-auth_user}
+      POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD:-auth_pass}
+      POSTGRES_DB: ${AUTH_DB_NAME:-auth_db}
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AUTH_DB_USER:-auth_user} -d ${AUTH_DB_NAME:-auth_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks: [clinica-net]
+
+  agendamento-db:
+    image: postgres:16-alpine
+    container_name: agendamento-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${AGENDAMENTO_DB_USER:-agendamento_user}
+      POSTGRES_PASSWORD: ${AGENDAMENTO_DB_PASSWORD:-agendamento_pass}
+      POSTGRES_DB: ${AGENDAMENTO_DB_NAME:-agendamento_db}
+    volumes:
+      - agendamento_db_data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AGENDAMENTO_DB_USER:-agendamento_user} -d ${AGENDAMENTO_DB_NAME:-agendamento_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks: [clinica-net]
+
+  clinico-db:
+    image: postgres:16-alpine
+    container_name: clinico-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${CLINICO_DB_USER:-clinico_user}
+      POSTGRES_PASSWORD: ${CLINICO_DB_PASSWORD:-clinico_pass}
+      POSTGRES_DB: ${CLINICO_DB_NAME:-clinico_db}
+    volumes:
+      - clinico_db_data:/var/lib/postgresql/data
+    ports:
+      - "5435:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CLINICO_DB_USER:-clinico_user} -d ${CLINICO_DB_NAME:-clinico_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks: [clinica-net]
+
+  notificacao-db:
+    image: postgres:16-alpine
+    container_name: notificacao-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${NOTIFICACAO_DB_USER:-notificacao_user}
+      POSTGRES_PASSWORD: ${NOTIFICACAO_DB_PASSWORD:-notificacao_pass}
+      POSTGRES_DB: ${NOTIFICACAO_DB_NAME:-notificacao_db}
+    volumes:
+      - notificacao_db_data:/var/lib/postgresql/data
+    ports:
+      - "5436:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NOTIFICACAO_DB_USER:-notificacao_user} -d ${NOTIFICACAO_DB_NAME:-notificacao_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks: [clinica-net]
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 60s
+    networks: [clinica-net]
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: rabbitmq
+    restart: unless-stopped
+    user: rabbitmq
+
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-clinica}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-clinica123}
+
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+    networks:
+      - clinica-net
+
+  auth-service:
+    build:
+      context: ./backend/auth-service
+      dockerfile: Dockerfile
+    container_name: auth-service
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${AUTH_DB_USER:-auth_user}:${AUTH_DB_PASSWORD:-auth_pass}@auth-db:5432/${AUTH_DB_NAME:-auth_db}
+      REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-clinica}:${RABBITMQ_PASSWORD:-clinica123}@rabbitmq:5672/
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-changeme-super-secret}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+    depends_on:
+      auth-db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./backend/auth-service:/app
+    networks: [clinica-net]
+
+  agendamento-service:
+    build:
+      context: ./backend/agendamento-service
+      dockerfile: Dockerfile
+    container_name: agendamento-service
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${AGENDAMENTO_DB_USER:-agendamento_user}:${AGENDAMENTO_DB_PASSWORD:-agendamento_pass}@agendamento-db:5432/${AGENDAMENTO_DB_NAME:-agendamento_db}
+      REDIS_URL: redis://redis:6379/1
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-clinica}:${RABBITMQ_PASSWORD:-clinica123}@rabbitmq:5672/
+      AUTH_SERVICE_URL: http://auth-service:8000
+    depends_on:
+      agendamento-db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+    ports:
+      - "8002:8000"
+    volumes:
+      - ./backend/agendamento-service:/app
+    networks: [clinica-net]
+
+  clinico-service:
+    build:
+      context: ./backend/clinico-service
+      dockerfile: Dockerfile
+    container_name: clinico-service
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${CLINICO_DB_USER:-clinico_user}:${CLINICO_DB_PASSWORD:-clinico_pass}@clinico-db:5432/${CLINICO_DB_NAME:-clinico_db}
+      REDIS_URL: redis://redis:6379/2
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-clinica}:${RABBITMQ_PASSWORD:-clinica123}@rabbitmq:5672/
+      AUTH_SERVICE_URL: http://auth-service:8000
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-sa-east-1}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-clinica-multimidia}
+      WHISPER_MODEL: ${WHISPER_MODEL:-base}
+    depends_on:
+      clinico-db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+    ports:
+      - "8003:8000"
+    volumes:
+      - ./backend/clinico-service:/app
+    networks: [clinica-net]
+
+  notificacao-service:
+    build:
+      context: ./backend/notificacao-service
+      dockerfile: Dockerfile
+    container_name: notificacao-service
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${NOTIFICACAO_DB_USER:-notificacao_user}:${NOTIFICACAO_DB_PASSWORD:-notificacao_pass}@notificacao-db:5432/${NOTIFICACAO_DB_NAME:-notificacao_db}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-clinica}:${RABBITMQ_PASSWORD:-clinica123}@rabbitmq:5672/
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      WHATSAPP_API_TOKEN: ${WHATSAPP_API_TOKEN:-}
+    depends_on:
+      notificacao-db: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+    ports:
+      - "8004:8000"
+    volumes:
+      - ./backend/notificacao-service:/app
+    networks: [clinica-net]
+
+  api-gateway:
+    build:
+      context: ./backend/api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    restart: unless-stopped
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:8000
+      AGENDAMENTO_SERVICE_URL: http://agendamento-service:8000
+      CLINICO_SERVICE_URL: http://clinico-service:8000
+      NOTIFICACAO_SERVICE_URL: http://notificacao-service:8000
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-changeme-super-secret}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+    depends_on:
+      - auth-service
+      - agendamento-service
+      - clinico-service
+      - notificacao-service
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/api-gateway:/app
+    networks: [clinica-net]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    depends_on:
+      - api-gateway
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks: [clinica-net]
+
+# =============================================================================
+volumes:
+  auth_db_data:
+  agendamento_db_data:
+  clinico_db_data:
+  notificacao_db_data:
+  redis_data:
+  rabbitmq_data:
+
+networks:
+  clinica-net:
+    driver: bridge
