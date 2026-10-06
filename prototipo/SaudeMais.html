@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Saúde Mais - Portal do Beneficiário (Protótipo)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "SF Pro Display", "Segoe UI", Roboto, Arial, sans-serif;
+    color: #1c2b45; min-height: 100vh; display: flex;
+    background: #f4f7fb;
+  }
+
+  /* ===== Navegação SÓ com CSS (radio + label): funciona em qualquer visualizador ===== */
+  .nav-radio { position: absolute; opacity: 0; pointer-events: none; }
+  .secao { display: none; animation: aparecer .35s ease; }
+  @keyframes aparecer { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  #r-inicio:checked ~ main #inicio,
+  #r-hist:checked ~ main #historico,
+  #r-esp:checked ~ main #especialidades,
+  #r-exames:checked ~ main #exames,
+  #r-agendar:checked ~ main #agendar,
+  #r-tele:checked ~ main #telemedicina,
+  #r-receitas:checked ~ main #receitas,
+  #r-carteira:checked ~ main #carteira,
+  #r-metas:checked ~ main #metas,
+  #r-notif:checked ~ main #notificacoes,
+  #r-config:checked ~ main #configuracoes { display: block; }
+
+  #r-inicio:checked ~ nav label[for=r-inicio],
+  #r-hist:checked ~ nav label[for=r-hist],
+  #r-esp:checked ~ nav label[for=r-esp],
+  #r-exames:checked ~ nav label[for=r-exames],
+  #r-agendar:checked ~ nav label[for=r-agendar],
+  #r-tele:checked ~ nav label[for=r-tele],
+  #r-receitas:checked ~ nav label[for=r-receitas],
+  #r-carteira:checked ~ nav label[for=r-carteira],
+  #r-metas:checked ~ nav label[for=r-metas],
+  #r-notif:checked ~ nav label[for=r-notif],
+  #r-config:checked ~ nav label[for=r-config] {
+    background: #1d5fd8; color: #fff;
+  }
+
+  /* ===== Vidro (Liquid Glass) ===== */
+  .vidro {
+    background: #ffffff;
+    border: 1px solid #e3eaf4;
+    box-shadow: 0 2px 10px rgba(20,60,130,.06);
+    border-radius: 16px;
+  }
+
+  /* Menu lateral */
+  nav { width: 250px; position: fixed; top: 16px; bottom: 16px; left: 16px; padding: 18px 12px; overflow-y: auto; }
+  .logo { font-size: 24px; font-weight: 800; padding: 4px 12px 14px; color: #1d4fd8; letter-spacing: -.5px; }
+  .logo span { color: #4fa6ff; }
+  .usuario { display: flex; gap: 10px; align-items: center; padding: 12px; margin-bottom: 12px; border-radius: 16px; background: #f1f6fd; font-size: 12px; color: #5a6b88; }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; background: #1d5fd8; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
+  .usuario b { display: block; color: #1c2b45; font-size: 14px; }
+  nav label { display: flex; align-items: center; gap: 10px; padding: 11px 14px; margin: 3px 0; border-radius: 14px; cursor: pointer; font-size: 14px; color: #33476b; transition: .2s; }
+  nav label:hover { background: #eef4fd; }
+  .badge { margin-left: auto; background: #ff4d6d; color: #fff; border-radius: 10px; padding: 1px 7px; font-size: 11px; }
+
+  main { margin-left: 282px; flex: 1; padding: 22px 26px 22px 0; }
+
+  h2 { font-size: 28px; letter-spacing: -.5px; color: #12306b; }
+  .sub { color: #5a6b88; font-size: 14px; margin: 4px 0 20px; }
+  h3 { color: #12306b; margin-bottom: 14px; font-size: 16px; }
+
+  .card { padding: 22px; margin-bottom: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 1000px) { .grid2 { grid-template-columns: 1fr; } }
+
+  .kpi { padding: 18px; }
+  .kpi small { color: #5a6b88; }
+  .kpi b { display: block; font-size: 22px; color: #1d4fd8; margin-top: 6px; }
+
+  .campo { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 5px; color: #4a5b78; }
+  input[type=text], input[type=date], input[type=file], select, textarea {
+    width: 100%; padding: 11px 13px; border-radius: 12px; font-size: 14px; font-family: inherit; color: #1c2b45;
+    background: #fff; border: 1px solid #d5e0ee; outline: none;
+  }
+  input:focus, select:focus, textarea:focus { border-color: #1d5fd8; box-shadow: 0 0 0 3px rgba(29,95,216,.12); }
+  textarea { min-height: 85px; resize: vertical; }
+
+  .btn {
+    display: inline-block; padding: 10px 18px; border-radius: 999px; font-size: 14px; font-weight: 600; cursor: pointer;
+    margin-top: 14px; text-decoration: none; border: 1px solid rgba(255,255,255,.6);
+    background: #1d5fd8; color: #fff;
+  }
+  .btn:hover { filter: brightness(1.07); }
+  .btn.vidro-btn { background: #fff; color: #1d5fd8; border: 1px solid #c9daf5; }
+  .btn.vermelho { background: #d93250; }
+  .btn.peq { padding: 6px 12px; font-size: 12px; margin-top: 0; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; padding: 10px; color: #5a6b88; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid rgba(29,79,216,.12); }
+  td { padding: 12px 10px; border-bottom: 1px solid rgba(29,79,216,.07); }
+  tr:hover td { background: #f6f9fe; }
+
+  .tag { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .ok { background: rgba(40,200,140,.16); color: #12875c; }
+  .pend { background: rgba(255,180,0,.18); color: #9a6a00; }
+  .alerta { background: rgba(255,77,109,.15); color: #c42245; }
+  .info { background: rgba(47,123,255,.14); color: #1d4fd8; }
+
+  /* Ícones de atalho / especialidades */
+  .tile { text-align: center; padding: 20px 10px; border-radius: 20px; cursor: pointer; display: block; transition: .2s; color: #1c2b45; }
+  .tile:hover { transform: translateY(-3px); border-color: #1d5fd8; }
+  .tile .ic { width: 58px; height: 58px; margin: 0 auto 10px; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 28px;
+    background: #eaf1fd; }
+  .tile small { color: #5a6b88; }
+
+  /* Linha do tempo */
+  .timeline { border-left: 2px solid rgba(47,123,255,.35); margin-left: 10px; padding-left: 22px; }
+  .item { position: relative; margin-bottom: 16px; padding: 14px 16px; border-radius: 16px; background: #f6f9fe; }
+  .item::before { content: ""; position: absolute; left: -30px; top: 18px; width: 12px; height: 12px; border-radius: 50%; background: #2f7bff; box-shadow: 0 0 0 4px rgba(47,123,255,.2); }
+  .item small { color: #5a6b88; }
+  .item p { font-size: 14px; margin-top: 4px; line-height: 1.5; }
+
+  /* Médicos */
+  .medico { display: flex; gap: 14px; align-items: center; padding: 14px; border-radius: 18px; background: #f6f9fe; margin-bottom: 12px; }
+  .foto { width: 54px; height: 54px; border-radius: 50%; background: linear-gradient(135deg, #cfe3ff, #9cc8ff); display: flex; align-items: center; justify-content: center; font-size: 26px; flex-shrink: 0; }
+  .medico .dados { flex: 1; font-size: 14px; }
+  .medico small { color: #5a6b88; }
+  .horarios { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .horarios input { display: none; }
+  .horarios span { display: inline-block; padding: 6px 12px; border-radius: 999px; font-size: 12px; cursor: pointer; background: #fff; border: 1px solid rgba(47,123,255,.3); color: #1d4fd8; }
+  .horarios input:checked + span { background: #1d5fd8; color: #fff; }
+
+  /* Resultados */
+  .valor { display: flex; align-items: center; gap: 10px; font-size: 13px; margin: 10px 0; }
+  .valor .nome { width: 110px; }
+  .faixa { flex: 1; height: 10px; border-radius: 5px; position: relative; background: linear-gradient(90deg, rgba(255,77,109,.35) 0 20%, rgba(40,200,140,.35) 20% 80%, rgba(255,77,109,.35) 80%); }
+  .faixa i { position: absolute; top: -4px; width: 6px; height: 18px; background: #1d4fd8; border-radius: 3px; border: 1px solid #fff; }
+
+  /* Telemedicina */
+  .video { border-radius: 20px; height: 300px; position: relative; display: flex; align-items: center; justify-content: center; font-size: 70px;
+    background: #dbe7fa; overflow: hidden; }
+  .video .eu { position: absolute; bottom: 14px; right: 14px; width: 110px; height: 76px; border-radius: 14px; font-size: 28px; display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,.35); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,.8); }
+  .video .nome { position: absolute; top: 14px; left: 14px; font-size: 13px; color: #12306b; padding: 6px 12px; border-radius: 999px; background: #fff; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,.6); }
+  .controles { text-align: center; }
+  .controles .btn { width: 50px; height: 50px; padding: 0; line-height: 48px; font-size: 20px; }
+  .fila { text-align: center; padding: 20px; border-radius: 18px; background: rgba(47,123,255,.1); }
+  .fila b { display: block; font-size: 44px; color: #1d4fd8; }
+
+  /* Carteirinha */
+  .carteirinha { position: relative; max-width: 440px; padding: 26px; border-radius: 26px; color: #fff; overflow: hidden;
+    background: linear-gradient(135deg, #1d5fd8, #3b82f6);
+    box-shadow: 0 8px 20px rgba(29,95,216,.25); }
+  .carteirinha::after { content: ""; position: absolute; top: -60px; right: -60px; width: 200px; height: 200px; border-radius: 50%; background: rgba(255,255,255,.18); }
+  .carteirinha .topo { display: flex; justify-content: space-between; font-size: 14px; }
+  .carteirinha .num { font-size: 21px; letter-spacing: 2px; margin: 34px 0 18px; font-family: monospace; }
+  .carteirinha .linha { display: flex; justify-content: space-between; font-size: 11px; opacity: .95; }
+  .carteirinha .linha b { display: block; font-size: 14px; }
+  .lista li { list-style: none; padding: 10px 0; border-bottom: 1px solid rgba(29,79,216,.08); font-size: 14px; }
+
+  /* Metas */
+  .ofensiva { text-align: center; padding: 22px; border-radius: 22px; color: #fff;
+    background: #1d5fd8; }
+  .ofensiva b { display: block; font-size: 46px; }
+  .semana { display: flex; gap: 8px; justify-content: center; margin-top: 12px; }
+  .dia { width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,.25); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; border: 1px solid #f6f9fe; }
+  .dia.feito { background: #fff; color: #1d5fd8; }
+  .meta { padding: 14px; border-radius: 16px; background: #f6f9fe; margin-bottom: 10px; }
+  .meta .topo { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px; }
+  .barra { height: 10px; border-radius: 5px; background: rgba(29,79,216,.1); overflow: hidden; }
+  .barra div { height: 100%; border-radius: 5px; background: #1d5fd8; }
+  .check { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: #f6f9fe; margin-bottom: 8px; font-size: 14px; cursor: pointer; }
+  .check input { transform: scale(1.3); accent-color: #2f7bff; }
+  .check input:checked + span { text-decoration: line-through; color: #2f7bff; }
+  .medalha { display: inline-block; text-align: center; margin: 6px 10px; font-size: 12px; }
+  .medalha span { display: block; font-size: 34px; }
+  .medalha.bloq { opacity: .3; }
+
+  /* Notificações */
+  .notif { display: flex; gap: 12px; padding: 14px; border-radius: 16px; margin-bottom: 8px; background: #fafcff; }
+  .notif.nova { background: #f6f9fe; border-left: 4px solid #2f7bff; }
+  .notif .ic { font-size: 24px; }
+  .notif div { font-size: 14px; flex: 1; line-height: 1.45; }
+  .notif small { color: #5a6b88; }
+  input[type=checkbox] { accent-color: #2f7bff; }
+
+  .busca { display: flex; gap: 10px; }
+  .busca input { flex: 1; }
+  .busca .btn { margin-top: 0; }
+
+  footer { text-align: center; color: #7a8aa6; font-size: 12px; margin-top: 20px; }
+
+  /* ===== Início ===== */
+  .destaque { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; background: #1d5fd8; color: #fff; border-radius: 16px; padding: 22px; margin-bottom: 20px; }
+  .destaque .data { background: #fff; color: #1d5fd8; border-radius: 14px; padding: 12px 18px; text-align: center; min-width: 90px; }
+  .destaque .data b { display: block; font-size: 32px; line-height: 1; }
+  .destaque .data small { font-size: 12px; text-transform: uppercase; font-weight: 700; }
+  .destaque .txt { flex: 1; min-width: 200px; font-size: 14px; line-height: 1.6; }
+  .destaque .txt b { font-size: 18px; }
+  .destaque .btn { margin-top: 0; background: #fff; color: #1d5fd8; }
+  .destaque .btn.contorno { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.7); }
+  .infos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .info-item { background: #f4f7fb; border-radius: 12px; padding: 12px; font-size: 13px; }
+  .info-item small { color: #5a6b88; display: block; margin-bottom: 3px; }
+  .info-item b { color: #12306b; font-size: 14px; }
+  .info-item.atencao { background: #fff1f3; }
+  .info-item.atencao b { color: #c42245; }
+  .atual { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid #edf1f7; font-size: 14px; }
+  .atual:last-child { border-bottom: none; }
+  .atual .ic { width: 38px; height: 38px; border-radius: 10px; background: #eaf1fd; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .atual small { color: #5a6b88; }
+  @media (max-width: 480px) { .infos { grid-template-columns: 1fr; } }
+
+  /* ===== Login ===== */
+  .login { display: none; width: 100%; min-height: 100vh; align-items: center; justify-content: center; padding: 20px; }
+  #r-login:checked ~ .login { display: flex; }
+  #r-login:checked ~ nav, #r-login:checked ~ main { display: none; }
+  .login-box { width: 100%; max-width: 400px; padding: 34px 30px; text-align: center; }
+  .login-box .logo { font-size: 34px; padding: 0 0 4px; }
+  .login-box .sub { margin-bottom: 22px; }
+  .login-box .campo { text-align: left; }
+  .login-box .btn { width: 100%; text-align: center; }
+  .login-links { display: flex; justify-content: space-between; font-size: 13px; margin-top: 14px; color: #1d4fd8; }
+  .divisor { display: flex; align-items: center; gap: 10px; color: #7a8aa6; font-size: 12px; margin: 18px 0 4px; }
+  .divisor::before, .divisor::after { content: ""; flex: 1; height: 1px; background: rgba(29,79,216,.15); }
+
+  /* ===== Grupos do menu ===== */
+  .grupo { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: #7a8aa6; font-weight: 700; padding: 14px 14px 4px; }
+  .rodape-menu { border-top: 1px solid rgba(29,79,216,.1); margin-top: 12px; padding-top: 8px; }
+  nav label.sair { color: #c42245; }
+  nav label.sair:hover { background: rgba(255,77,109,.12); }
+
+  /* Configurações */
+  .opcao { display: flex; justify-content: space-between; align-items: center; padding: 13px 0; border-bottom: 1px solid rgba(29,79,216,.08); font-size: 14px; gap: 10px; }
+  .opcao small { display: block; color: #5a6b88; font-size: 12px; }
+  .switch input { display: none; }
+  .switch span { display: inline-block; width: 46px; height: 28px; border-radius: 999px; background: rgba(120,140,170,.35); position: relative; cursor: pointer; transition: .25s; flex-shrink: 0; }
+  .switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,.2); transition: .25s; }
+  .switch input:checked + span { background: #2f7bff; }
+  .switch input:checked + span::after { left: 21px; }
+
+  /* ===== Responsivo ===== */
+  @media (max-width: 1100px) {
+    nav { width: 220px; }
+    main { margin-left: 252px; }
+  }
+  @media (max-width: 820px) {
+    body { display: block; }
+    nav { position: sticky; top: 8px; left: auto; bottom: auto; width: auto; margin: 8px; padding: 8px; display: flex; align-items: center; gap: 4px; overflow-x: auto; z-index: 10; border-radius: 18px; }
+    nav .logo { font-size: 18px; padding: 0 10px; white-space: nowrap; }
+    nav .usuario, nav .grupo { display: none; }
+    nav label { white-space: nowrap; margin: 0; padding: 9px 12px; font-size: 13px; }
+    .rodape-menu { display: flex; border: none; margin: 0; padding: 0; }
+    main { margin-left: 0; padding: 12px; }
+    h2 { font-size: 23px; }
+    .grid2 { grid-template-columns: 1fr; }
+    .grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+    .card { padding: 16px; }
+    table { display: block; overflow-x: auto; white-space: nowrap; }
+    .busca { flex-direction: column; }
+    .busca select { width: 100% !important; }
+    .medico { flex-direction: column; text-align: center; }
+    .horarios { justify-content: center; }
+    .carteirinha { max-width: 100%; }
+  }
+  @media (max-width: 480px) {
+    .grid { grid-template-columns: 1fr 1fr; }
+    .kpi b { font-size: 18px; }
+    .carteirinha .num { font-size: 16px; }
+    .video { height: 220px; }
+    .opcao { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Botões de navegação invisíveis (controle das telas) -->
+<input class="nav-radio" type="radio" name="tela" id="r-login" checked>
+<input class="nav-radio" type="radio" name="tela" id="r-inicio">
+<input class="nav-radio" type="radio" name="tela" id="r-hist">
+<input class="nav-radio" type="radio" name="tela" id="r-esp">
+<input class="nav-radio" type="radio" name="tela" id="r-exames">
+<input class="nav-radio" type="radio" name="tela" id="r-agendar">
+<input class="nav-radio" type="radio" name="tela" id="r-tele">
+<input class="nav-radio" type="radio" name="tela" id="r-receitas">
+<input class="nav-radio" type="radio" name="tela" id="r-carteira">
+<input class="nav-radio" type="radio" name="tela" id="r-metas">
+<input class="nav-radio" type="radio" name="tela" id="r-notif">
+<input class="nav-radio" type="radio" name="tela" id="r-config">
+
+<!-- ================= LOGIN ================= -->
+<section class="login">
+  <div class="login-box vidro">
+    <div class="logo">Saúde<span>Mais</span></div>
+    <p class="sub">Acesse sua área do beneficiário</p>
+    <span class="campo">CPF ou número da carteirinha</span>
+    <input type="text" placeholder="000.000.000-00">
+    <span class="campo">Senha</span>
+    <input type="password" placeholder="••••••••" style="width:100%;padding:11px 13px;border-radius:12px;font-size:14px;background:#fff;border:1px solid #d5e0ee;outline:none">
+    <label class="check" style="margin-top:12px"><input type="checkbox" checked><span>Lembrar de mim</span></label>
+    <label for="r-inicio" class="btn">Entrar</label>
+    <div class="login-links"><span>Esqueci minha senha</span><span>Primeiro acesso</span></div>
+    <div class="divisor">ou</div>
+    <label for="r-inicio" class="btn vidro-btn">🔐 Entrar com gov.br</label>
+    <p style="font-size:11px;color:#7a8aa6;margin-top:18px">🔒 Ambiente seguro · Seus dados são protegidos pela LGPD</p>
+  </div>
+</section>
+
+<nav class="vidro">
+  <div class="logo">Saúde<span>Mais</span></div>
+  <div class="usuario"><div class="avatar">LA</div><div><b>Larissa Andrade</b>Plano Prata Nacional</div></div>
+  <label for="r-inicio">🏠 Início</label>
+
+  <div class="grupo">Minha Saúde</div>
+  <label for="r-hist">📋 Meu Histórico</label>
+  <label for="r-exames">🧪 Exames e Resultados</label>
+  <label for="r-receitas">💊 Receitas</label>
+  <label for="r-metas">🎯 Metas de Saúde</label>
+
+  <div class="grupo">Atendimento</div>
+  <label for="r-esp">🩺 Especialidades</label>
+  <label for="r-agendar">📅 Agendar Consulta</label>
+  <label for="r-tele">🎥 Telemedicina</label>
+
+  <div class="grupo">Meu Plano</div>
+  <label for="r-carteira">💳 Carteira e Plano</label>
+  <label for="r-notif">🔔 Notificações <span class="badge">3</span></label>
+
+  <div class="rodape-menu">
+    <label for="r-config">⚙️ Configurações</label>
+    <label for="r-login" class="sair">🚪 Sair</label>
+  </div>
+</nav>
+
+<main>
+
+<!-- ================= INÍCIO ================= -->
+<section class="secao" id="inicio">
+  <h2>Olá, Larissa! 👋</h2>
+  <p class="sub">Segunda-feira, 05 de outubro de 2026</p>
+
+  <!-- Próxima consulta -->
+  <div class="destaque">
+    <div class="data"><small>Out</small><b>08</b><small>Quinta</small></div>
+    <div class="txt">
+      <span style="opacity:.85">📅 Sua próxima consulta</span><br>
+      <b>Dermatologia — Dra. Helena Vasconcelos</b><br>
+      🕘 09:30 · 📍 Clínica Vida Plena — Rua das Graças, 450, Recife<br>
+      <span class="tag" style="background:rgba(255,255,255,.2);color:#fff">Presencial · Confirmada</span>
+    </div>
+    <div>
+      <label for="r-agendar" class="btn">Ver detalhes</label>
+      <label for="r-agendar" class="btn contorno">Remarcar</label>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="kpi vidro"><small>Resultados novos</small><b>2 exames</b></div>
+    <div class="kpi vidro"><small>Receitas ativas</small><b>3</b></div>
+    <div class="kpi vidro"><small>Ofensiva de saúde</small><b>🔥 9 dias</b></div>
+    <div class="kpi vidro"><small>Mensalidade</small><b>Vence 10/10</b></div>
+  </div>
+  <br>
+
+  <div class="grid2">
+    <!-- Atualizações recentes -->
+    <div class="card vidro">
+      <h3>🔄 Atualizações recentes</h3>
+      <div class="atual"><div class="ic">🧪</div><div><b>Resultado do hemograma disponível</b><br><small>Hoje, 09:15 · Laboratório Alfa Diagnósticos</small></div></div>
+      <div class="atual"><div class="ic">✅</div><div><b>Ecocardiograma autorizado</b> e agendado para 12/10<br><small>03/10, 14:20 · Hospital Santa Clara</small></div></div>
+      <div class="atual"><div class="ic">💊</div><div><b>Nova receita emitida</b> — Azitromicina 500mg<br><small>01/10, 10:40 · Dr. Caio Marinho (Telemedicina)</small></div></div>
+      <div class="atual"><div class="ic">⏳</div><div><b>Ressonância do joelho</b> em análise pelo plano<br><small>30/09 · Prazo de resposta: até 07/10</small></div></div>
+      <div class="atual"><div class="ic">💳</div><div><b>Pagamento de setembro confirmado</b><br><small>28/09 · R$ 519,90</small></div></div>
+      <label for="r-notif" class="btn peq vidro-btn" style="margin-top:8px">Ver todas</label>
+    </div>
+
+    <!-- Informações importantes -->
+    <div class="card vidro">
+      <h3>🩺 Informações importantes</h3>
+      <div class="infos">
+        <div class="info-item"><small>Tipo sanguíneo</small><b>O+</b></div>
+        <div class="info-item"><small>Idade</small><b>34 anos</b></div>
+        <div class="info-item atencao"><small>⚠️ Alergias</small><b>Penicilina · Dipirona</b></div>
+        <div class="info-item"><small>Condições</small><b>Hipertensão leve</b></div>
+        <div class="info-item"><small>Uso contínuo</small><b>Losartana 50mg</b></div>
+        <div class="info-item"><small>Última consulta</small><b>01/10 · Clínico Geral</b></div>
+        <div class="info-item"><small>Vacinas</small><b>Em dia ✔</b></div>
+        <div class="info-item"><small>Contato de emergência</small><b>Marcos Teles · (81) 99654-1122</b></div>
+      </div>
+      <h3 style="margin-top:20px">📄 Meu plano</h3>
+      <div class="infos">
+        <div class="info-item"><small>Plano</small><b>Prata Nacional</b></div>
+        <div class="info-item"><small>Situação</small><b style="color:#12875c">Ativo ✔</b></div>
+        <div class="info-item"><small>Carteirinha</small><b>0087 4521 3369 0001</b></div>
+        <div class="info-item"><small>Carência</small><b>Cumprida</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card vidro">
+    <h3>Acesso rápido</h3>
+    <div class="grid">
+      <label for="r-agendar" class="tile"><div class="ic">📅</div><b>Agendar</b></label>
+      <label for="r-tele" class="tile"><div class="ic">🎥</div><b>Telemedicina</b></label>
+      <label for="r-exames" class="tile"><div class="ic">🧪</div><b>Resultados</b></label>
+      <label for="r-carteira" class="tile"><div class="ic">💳</div><b>Carteirinha</b></label>
+    </div>
+  </div>
+</section>
+
+<!-- ================= HISTÓRICO ================= -->
+<section class="secao" id="historico">
+  <h2>Meu Histórico</h2>
+  <p class="sub">Todos os seus atendimentos, exames e procedimentos pelo plano.</p>
+  <div class="card vidro">
+    <div class="grid">
+      <div><span class="campo">Período</span><select><option>Últimos 6 meses</option><option>Último ano</option><option>Tudo</option></select></div>
+      <div><span class="campo">Tipo</span><select><option>Todos</option><option>Consultas</option><option>Exames</option><option>Telemedicina</option><option>Pronto-atendimento</option></select></div>
+      <div><span class="campo">Beneficiário</span><select><option>Larissa Andrade (titular)</option><option>Davi Andrade (dependente)</option></select></div>
+    </div>
+  </div>
+  <div class="card vidro">
+    <div class="timeline">
+      <div class="item"><small>01/10/2026 · Telemedicina</small><p><b>Clínico Geral</b> — Dr. Caio Marinho<br>Quadro gripal. Receita emitida.</p></div>
+      <div class="item"><small>22/09/2026 · Exame</small><p><b>Hemograma completo + Glicemia</b> — Laboratório Alfa Diagnósticos<br>Resultado disponível.</p></div>
+      <div class="item"><small>15/09/2026 · Consulta presencial</small><p><b>Cardiologia</b> — Dr. Otávio Brandão · Hospital Santa Clara<br>Check-up anual. Pediu exames de sangue.</p></div>
+      <div class="item"><small>02/08/2026 · Exame</small><p><b>Ultrassom abdominal</b> — Clínica Imagem Total<br>Sem alterações.</p></div>
+      <div class="item"><small>10/07/2026 · Pronto-atendimento</small><p><b>Emergência</b> — Hospital Santa Clara<br>Entorse no tornozelo. Raio-X realizado.</p></div>
+    </div>
+    <a class="btn">⬇ Baixar histórico (PDF)</a>
+  </div>
+</section>
+
+<!-- ================= ESPECIALIDADES ================= -->
+<section class="secao" id="especialidades">
+  <h2>Especialidades</h2>
+  <p class="sub">Encontre médicos e clínicas da rede credenciada. Clique em uma especialidade para agendar.</p>
+  <div class="card vidro">
+    <div class="busca">
+      <input type="text" placeholder="🔍 Buscar especialidade, médico ou clínica...">
+      <select style="width:190px"><option>Recife - PE</option><option>Paulista - PE</option><option>Olinda - PE</option></select>
+      <a class="btn">Buscar</a>
+    </div>
+  </div>
+  <div class="grid">
+    <label for="r-agendar" class="tile vidro"><div class="ic">❤️</div><b>Cardiologia</b><br><small>48 médicos</small></label>
+    <label for="r-agendar" class="tile vidro"><div class="ic">🧠</div><b>Neurologia</b><br><small>21 médicos</small></label>
+    <label for="r-agendar" class="tile vidro"><div class="ic">👶</div><b>Pediatria</b><br><small>63 médicos</small></label>
+    <label for="r-agendar" class="tile vidro"><div class="ic">🦴</div><b>Ortopedia</b><br><small>37 médicos</small></label>
+    <label for="r-agendar" class="tile vidro"><div class="ic">👁️</div><b>Oftalmologia</b><br><small>29 médicos</small></label>
+    <label for="r-agendar" class="tile vidro"><div class="ic">👂</div><b>Otorrino</b><br><small>18 médicos</small></label>
+    <label for="r-agendar" class="tile vidro"><div class="ic">🌸</div><b>Ginecologia</b><br><small>41 médicos</small></label>
+    <label for="r-agendar" class="tile vidro"><div class="ic">🧴</div><b>Dermatologia</b><br><small>25 médicos</small></label>
+    <label for="r-agendar" class="tile vidro"><div class="ic">🗣️</div><b>Fonoaudiologia</b><br><small>16 profissionais</small></label>
+    <label for="r-agendar" class="tile vidro"><div class="ic">🧘</div><b>Psicologia</b><br><small>52 profissionais</small></label>
+    <label for="r-agendar" class="tile vidro"><div class="ic">🥗</div><b>Nutrição</b><br><small>19 profissionais</small></label>
+    <label for="r-tele" class="tile vidro"><div class="ic">🎥</div><b>Clínico Online</b><br><small>24 horas</small></label>
+  </div>
+</section>
+
+<!-- ================= EXAMES ================= -->
+<section class="secao" id="exames">
+  <h2>Exames e Resultados</h2>
+  <p class="sub">Acompanhe autorizações, agendamentos e resultados.</p>
+  <div class="card vidro">
+    <h3>Meus Exames</h3>
+    <table>
+      <tr><th>Exame</th><th>Local</th><th>Data</th><th>Status</th><th>Ação</th></tr>
+      <tr><td>Hemograma completo</td><td>Laboratório Alfa Diagnósticos</td><td>22/09/2026</td><td><span class="tag ok">Resultado pronto</span></td><td><a class="btn peq">Ver</a></td></tr>
+      <tr><td>Glicemia em jejum</td><td>Laboratório Alfa Diagnósticos</td><td>22/09/2026</td><td><span class="tag ok">Resultado pronto</span></td><td><a class="btn peq">Ver</a></td></tr>
+      <tr><td>Ressonância do joelho</td><td>Clínica Imagem Total</td><td>—</td><td><span class="tag pend">Aguardando autorização</span></td><td><a class="btn peq vidro-btn">Acompanhar</a></td></tr>
+      <tr><td>Ecocardiograma</td><td>Hospital Santa Clara</td><td>12/10/2026</td><td><span class="tag info">Agendado</span></td><td><a class="btn peq vermelho">Cancelar</a></td></tr>
+    </table>
+  </div>
+  <div class="grid2">
+    <div class="card vidro">
+      <h3>Resultado — Hemograma + Glicemia (22/09)</h3>
+      <div class="valor"><span class="nome">Hemoglobina</span><div class="faixa"><i style="left:50%"></i></div><span class="tag ok">13,5 g/dL</span></div>
+      <div class="valor"><span class="nome">Leucócitos</span><div class="faixa"><i style="left:45%"></i></div><span class="tag ok">7.200</span></div>
+      <div class="valor"><span class="nome">Plaquetas</span><div class="faixa"><i style="left:60%"></i></div><span class="tag ok">250 mil</span></div>
+      <div class="valor"><span class="nome">Glicemia</span><div class="faixa"><i style="left:84%"></i></div><span class="tag alerta">104 mg/dL</span></div>
+      <p style="font-size:12px;color:#5a6b88;margin-top:8px">Faixa verde = valores de referência. Converse com seu médico sobre o resultado.</p>
+      <a class="btn">⬇ Laudo PDF</a> <a class="btn vidro-btn">📤 Compartilhar</a>
+    </div>
+    <div class="card vidro">
+      <h3>Solicitar Autorização de Exame</h3>
+      <span class="campo">Nome do exame</span><input type="text" placeholder="Ex.: Ressonância magnética">
+      <span class="campo">Pedido médico (foto ou PDF)</span><input type="file">
+      <span class="campo">Local de preferência</span><select><option>Clínica Imagem Total</option><option>Hospital Santa Clara</option><option>Laboratório Alfa Diagnósticos</option></select>
+      <a class="btn">📨 Enviar solicitação</a>
+    </div>
+  </div>
+</section>
+
+<!-- ================= AGENDAR ================= -->
+<section class="secao" id="agendar">
+  <h2>Agendar Consulta</h2>
+  <p class="sub">Escolha a especialidade, o profissional e o horário.</p>
+  <div class="card vidro">
+    <div class="grid">
+      <div><span class="campo">Especialidade</span><select><option>Cardiologia</option><option>Dermatologia</option><option>Ortopedia</option><option>Pediatria</option></select></div>
+      <div><span class="campo">Tipo</span><select><option>Presencial</option><option>Telemedicina</option></select></div>
+      <div><span class="campo">Bairro</span><select><option>Recife - Boa Viagem</option><option>Recife - Graças</option><option>Paulista - Centro</option></select></div>
+      <div><span class="campo">Data</span><input type="date"></div>
+    </div>
+  </div>
+  <div class="card vidro">
+    <h3>Profissionais disponíveis</h3>
+    <div class="medico">
+      <div class="foto">👨‍⚕️</div>
+      <div class="dados"><b>Dr. Otávio Brandão</b> · Cardiologia · CRM 48213<br><small>Hospital Santa Clara — Boa Viagem · ⭐ 4,9 (184 avaliações)</small>
+        <div class="horarios">
+          <label><input type="radio" name="h"><span>08:00</span></label><label><input type="radio" name="h"><span>09:30</span></label>
+          <label><input type="radio" name="h"><span>14:00</span></label><label><input type="radio" name="h"><span>16:30</span></label>
+        </div>
+      </div>
+    </div>
+    <div class="medico">
+      <div class="foto">👩‍⚕️</div>
+      <div class="dados"><b>Dra. Bianca Furtado</b> · Cardiologia · CRM 55902<br><small>Clínica Vida Plena — Graças · ⭐ 4,8 (97 avaliações)</small>
+        <div class="horarios">
+          <label><input type="radio" name="h"><span>10:00</span></label><label><input type="radio" name="h"><span>11:00</span></label>
+          <label><input type="radio" name="h"><span>15:00</span></label>
+        </div>
+      </div>
+    </div>
+    <a class="btn">✔ Confirmar agendamento</a>
+  </div>
+  <div class="card vidro">
+    <h3>Minhas Consultas Agendadas</h3>
+    <table>
+      <tr><th>Data/Hora</th><th>Especialidade</th><th>Profissional</th><th>Tipo</th><th>Ações</th></tr>
+      <tr><td>08/10 · 09:30</td><td>Dermatologia</td><td>Dra. Helena Vasconcelos</td><td><span class="tag info">Presencial</span></td><td><a class="btn peq vidro-btn">Remarcar</a> <a class="btn peq vermelho">Cancelar</a></td></tr>
+      <tr><td>15/10 · 14:00</td><td>Nutrição</td><td>Nut. Rodrigo Sampaio</td><td><span class="tag ok">Online</span></td><td><a class="btn peq vidro-btn">Remarcar</a> <a class="btn peq vermelho">Cancelar</a></td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ================= TELEMEDICINA ================= -->
+<section class="secao" id="telemedicina">
+  <h2>Telemedicina</h2>
+  <p class="sub">Atendimento por vídeo, 24 horas, sem sair de casa.</p>
+  <div class="grid2">
+    <div class="card vidro">
+      <h3>Pronto-atendimento Online</h3>
+      <div class="fila">Sua posição na fila<b>3º</b>Tempo estimado: ~8 minutos</div>
+      <span class="campo">Descreva o que está sentindo</span>
+      <textarea placeholder="Ex.: dor de garganta e febre desde ontem"></textarea>
+      <label class="check" style="margin-top:10px"><input type="checkbox" checked><span>Autorizo o uso de câmera e microfone</span></label>
+      <a class="btn">🎥 Entrar na fila</a>
+    </div>
+    <div class="card vidro">
+      <h3>Consulta em andamento</h3>
+      <div class="video"><span class="nome">Dr. Caio Marinho · Clínico Geral</span>👨‍⚕️<div class="eu">🙂</div></div>
+      <div class="controles">
+        <a class="btn vidro-btn">🎤</a> <a class="btn vidro-btn">📷</a> <a class="btn vidro-btn">💬</a> <a class="btn vermelho">📞</a>
+      </div>
+    </div>
+  </div>
+  <div class="card vidro">
+    <h3>Teleconsultas agendadas</h3>
+    <table>
+      <tr><td>15/10 · 14:00 — Nutrição (Nut. Rodrigo Sampaio)</td><td><span class="tag pend">Link libera 10 min antes</span></td></tr>
+      <tr><td>22/10 · 19:00 — Psicologia (Psi. Tatiane Cordeiro)</td><td><span class="tag pend">Link libera 10 min antes</span></td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ================= RECEITAS ================= -->
+<section class="secao" id="receitas">
+  <h2>Receitas</h2>
+  <p class="sub">Receitas digitais emitidas nas suas consultas.</p>
+  <div class="card vidro">
+    <table>
+      <tr><th>Data</th><th>Medicamento</th><th>Como tomar</th><th>Médico</th><th>Validade</th><th>Ações</th></tr>
+      <tr><td>01/10/2026</td><td>Paracetamol 750mg</td><td>1 comp. de 6/6h se febre</td><td>Dr. Caio Marinho</td><td><span class="tag ok">Válida</span></td><td><a class="btn peq">⬇ PDF</a></td></tr>
+      <tr><td>01/10/2026</td><td>Azitromicina 500mg</td><td>1 comp. ao dia por 5 dias</td><td>Dr. Caio Marinho</td><td><span class="tag ok">Válida</span></td><td><a class="btn peq">⬇ PDF</a></td></tr>
+      <tr><td>15/09/2026</td><td>Losartana 50mg</td><td>1 comp. ao dia</td><td>Dr. Otávio Brandão</td><td><span class="tag pend">Vence em 5 dias</span></td><td><a class="btn peq vidro-btn">🔁 Renovar</a></td></tr>
+      <tr><td>10/07/2026</td><td>Ibuprofeno 600mg</td><td>1 comp. de 12/12h por 5 dias</td><td>Hospital Santa Clara</td><td><span class="tag alerta">Vencida</span></td><td><a class="btn peq">⬇ PDF</a></td></tr>
+    </table>
+  </div>
+  <div class="card vidro">
+    <h3>💊 Lembrete de medicamentos de hoje</h3>
+    <label class="check"><input type="checkbox" checked><span>08:00 — Losartana 50mg</span></label>
+    <label class="check"><input type="checkbox" checked><span>08:00 — Azitromicina 500mg</span></label>
+    <label class="check"><input type="checkbox"><span>14:00 — Beber 500ml de água</span></label>
+    <label class="check"><input type="checkbox"><span>22:00 — Paracetamol 750mg (se febre)</span></label>
+  </div>
+</section>
+
+<!-- ================= CARTEIRA ================= -->
+<section class="secao" id="carteira">
+  <h2>Carteira e Plano</h2>
+  <p class="sub">Sua carteirinha digital e os detalhes do seu plano.</p>
+  <div class="grid2">
+    <div>
+      <div class="carteirinha">
+        <div class="topo"><b>Saúde Mais</b><span>Prata Nacional</span></div>
+        <div class="num">0087 4521 3369 0001</div>
+        <div class="linha"><div>Beneficiária<b>LARISSA ANDRADE TELES</b></div><div>Validade<b>12/2027</b></div></div>
+        <div class="linha" style="margin-top:12px"><div>Acomodação<b>Apartamento</b></div><div>Abrangência<b>Nacional</b></div></div>
+      </div>
+      <a class="btn">⬇ Baixar carteirinha</a> <a class="btn vidro-btn">📲 Adicionar à carteira do celular</a>
+      <div class="card vidro" style="margin-top:20px">
+        <h3>Dependentes</h3>
+        <table><tr><td>👦 Davi Andrade Teles (filho)</td><td>0087 4521 3369 0002</td><td><a class="btn peq vidro-btn">Ver</a></td></tr></table>
+      </div>
+    </div>
+    <div>
+      <div class="card vidro">
+        <h3>Meu Plano</h3>
+        <ul class="lista">
+          <li>✅ Consultas e exames na rede credenciada</li>
+          <li>✅ Telemedicina 24h ilimitada</li>
+          <li>✅ Internação em apartamento</li>
+          <li>✅ Obstetrícia</li>
+          <li>✅ Cobertura nacional</li>
+          <li>❌ Odontologia <a class="btn peq" style="float:right">Contratar</a></li>
+        </ul>
+        <p style="font-size:13px;color:#5a6b88;margin-top:10px">Coparticipação: R$ 30,00 por consulta · Carência: cumprida</p>
+      </div>
+      <div class="card vidro">
+        <h3>Mensalidades</h3>
+        <table>
+          <tr><th>Mês</th><th>Valor</th><th>Status</th><th></th></tr>
+          <tr><td>Outubro/2026</td><td>R$ 489,90</td><td><span class="tag pend">Vence 10/10</span></td><td><a class="btn peq">Boleto / PIX</a></td></tr>
+          <tr><td>Setembro/2026</td><td>R$ 519,90</td><td><span class="tag ok">Pago</span></td><td><a class="btn peq vidro-btn">Recibo</a></td></tr>
+          <tr><td>Agosto/2026</td><td>R$ 489,90</td><td><span class="tag ok">Pago</span></td><td><a class="btn peq vidro-btn">Recibo</a></td></tr>
+        </table>
+        <a class="btn vidro-btn">📄 Informe para Imposto de Renda</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= METAS ================= -->
+<section class="secao" id="metas">
+  <h2>Metas de Saúde</h2>
+  <p class="sub">Cuide da sua saúde, cumpra metas e ganhe recompensas.</p>
+  <div class="grid2">
+    <div>
+      <div class="ofensiva">
+        🔥 <b>9</b> dias de ofensiva!
+        <div class="semana">
+          <div class="dia feito">S</div><div class="dia feito">T</div><div class="dia feito">Q</div>
+          <div class="dia feito">Q</div><div class="dia feito">S</div><div class="dia feito">S</div><div class="dia">D</div>
+        </div>
+        <p style="margin-top:10px;font-size:13px">Complete os desafios de hoje para manter sua ofensiva!</p>
+      </div>
+      <div class="card vidro" style="margin-top:20px">
+        <h3>✅ Desafios de hoje</h3>
+        <label class="check"><input type="checkbox" checked><span>Beber 2 litros de água</span></label>
+        <label class="check"><input type="checkbox" checked><span>Caminhar 30 minutos</span></label>
+        <label class="check"><input type="checkbox"><span>Tomar os medicamentos no horário</span></label>
+        <label class="check"><input type="checkbox"><span>Dormir pelo menos 7 horas</span></label>
+      </div>
+    </div>
+    <div>
+      <div class="card vidro">
+        <h3>🎯 Minhas Metas</h3>
+        <div class="meta"><div class="topo"><b>👟 Passos na semana</b><span>42.000 / 50.000</span></div><div class="barra"><div style="width:84%"></div></div></div>
+        <div class="meta"><div class="topo"><b>⚖️ Perder 5 kg</b><span>3 / 5 kg</span></div><div class="barra"><div style="width:60%"></div></div></div>
+        <div class="meta"><div class="topo"><b>🩺 Check-up anual</b><span>2 / 3 etapas</span></div><div class="barra"><div style="width:66%"></div></div></div>
+        <div class="meta"><div class="topo"><b>💉 Vacinas em dia</b><span>Concluída</span></div><div class="barra"><div style="width:100%"></div></div></div>
+        <a class="btn">➕ Nova meta</a>
+      </div>
+      <div class="card vidro">
+        <h3>🏅 Conquistas</h3>
+        <div class="medalha"><span>🥉</span>3 dias</div>
+        <div class="medalha"><span>🥈</span>7 dias</div>
+        <div class="medalha bloq"><span>🥇</span>30 dias</div>
+        <div class="medalha bloq"><span>🏆</span>Check-up completo</div>
+        <p style="font-size:13px;color:#5a6b88;margin-top:8px">⭐ 1.250 pontos — troque por descontos em farmácias parceiras.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= NOTIFICAÇÕES ================= -->
+<section class="secao" id="notificacoes">
+  <h2>Notificações</h2>
+  <p class="sub">Avisos, lembretes e novidades do seu plano.</p>
+  <div class="grid2">
+    <div class="card vidro">
+      <div class="notif nova"><span class="ic">🧪</span><div><b>Resultado disponível</b><br>Seu hemograma já pode ser visualizado.<br><small>Hoje, 09:15</small></div></div>
+      <div class="notif nova"><span class="ic">📅</span><div><b>Lembrete de consulta</b><br>Dermatologia amanhã às 09:30 com Dra. Helena Vasconcelos.<br><small>Hoje, 08:00</small></div></div>
+      <div class="notif nova"><span class="ic">💳</span><div><b>Mensalidade a vencer</b><br>A mensalidade de outubro vence em 10/10.<br><small>Ontem, 10:00</small></div></div>
+      <div class="notif"><span class="ic">✅</span><div><b>Exame autorizado</b><br>Ecocardiograma autorizado e agendado para 12/10.<br><small>03/10, 14:20</small></div></div>
+      <div class="notif"><span class="ic">🔥</span><div><b>Ofensiva de 7 dias!</b><br>Você ganhou a medalha de prata. Continue assim!<br><small>02/10, 20:00</small></div></div>
+      <div class="notif"><span class="ic">💊</span><div><b>Receita vencendo</b><br>A receita de Losartana vence em 5 dias.<br><small>01/10, 09:00</small></div></div>
+    </div>
+    <div class="card vidro">
+      <h3>Preferências</h3>
+      <table>
+        <tr><th>Aviso</th><th>App</th><th>WhatsApp</th><th>E-mail</th></tr>
+        <tr><td>Consultas</td><td><input type="checkbox" checked></td><td><input type="checkbox" checked></td><td><input type="checkbox"></td></tr>
+        <tr><td>Resultados</td><td><input type="checkbox" checked></td><td><input type="checkbox"></td><td><input type="checkbox" checked></td></tr>
+        <tr><td>Medicamentos</td><td><input type="checkbox" checked></td><td><input type="checkbox" checked></td><td><input type="checkbox"></td></tr>
+        <tr><td>Mensalidade</td><td><input type="checkbox" checked></td><td><input type="checkbox"></td><td><input type="checkbox" checked></td></tr>
+        <tr><td>Metas de saúde</td><td><input type="checkbox" checked></td><td><input type="checkbox"></td><td><input type="checkbox"></td></tr>
+      </table>
+      <a class="btn">💾 Salvar preferências</a>
+    </div>
+  </div>
+</section>
+
+<!-- ================= CONFIGURAÇÕES ================= -->
+<section class="secao" id="configuracoes">
+  <h2>Configurações</h2>
+  <p class="sub">Gerencie sua conta, segurança e preferências.</p>
+  <div class="grid2">
+    <div class="card vidro">
+      <h3>👤 Dados pessoais</h3>
+      <span class="campo">Nome</span><input type="text" value="Larissa Andrade Teles">
+      <span class="campo">E-mail</span><input type="text" value="larissa.teles@email.com">
+      <span class="campo">Celular</span><input type="text" value="(81) 99876-5432">
+      <span class="campo">Endereço</span><input type="text" value="Rua das Palmeiras, 120 - Boa Viagem, Recife/PE">
+      <a class="btn">💾 Salvar alterações</a>
+    </div>
+    <div class="card vidro">
+      <h3>🔒 Segurança</h3>
+      <div class="opcao"><div>Alterar senha<small>Última alteração há 3 meses</small></div><a class="btn peq vidro-btn">Alterar</a></div>
+      <div class="opcao"><div>Verificação em duas etapas<small>Código por SMS ao entrar</small></div><label class="switch"><input type="checkbox" checked><span></span></label></div>
+      <div class="opcao"><div>Entrar com biometria<small>Face ID / digital no celular</small></div><label class="switch"><input type="checkbox" checked><span></span></label></div>
+      <div class="opcao"><div>Dispositivos conectados<small>2 dispositivos ativos</small></div><a class="btn peq vidro-btn">Ver</a></div>
+    </div>
+    <div class="card vidro">
+      <h3>🎨 Aparência e acessibilidade</h3>
+      <div class="opcao"><div>Tamanho da fonte</div><select style="width:150px"><option>Normal</option><option>Grande</option><option>Muito grande</option></select></div>
+      <div class="opcao"><div>Modo escuro<small>Em breve</small></div><label class="switch"><input type="checkbox"><span></span></label></div>
+      <div class="opcao"><div>Alto contraste</div><label class="switch"><input type="checkbox"><span></span></label></div>
+      <div class="opcao"><div>Idioma</div><select style="width:150px"><option>Português</option><option>English</option><option>Español</option></select></div>
+    </div>
+    <div class="card vidro">
+      <h3>🛡️ Privacidade (LGPD)</h3>
+      <div class="opcao"><div>Compartilhar resultados com meus médicos</div><label class="switch"><input type="checkbox" checked><span></span></label></div>
+      <div class="opcao"><div>Receber ofertas e novidades</div><label class="switch"><input type="checkbox"><span></span></label></div>
+      <div class="opcao"><div>Baixar meus dados</div><a class="btn peq vidro-btn">Solicitar</a></div>
+      <div class="opcao"><div>Notificações<small>Escolha canais e tipos de aviso</small></div><label for="r-notif" class="btn peq vidro-btn">Abrir</label></div>
+      <label for="r-login" class="btn vermelho">🚪 Sair da conta</label>
+    </div>
+  </div>
+</section>
+
+<footer>Protótipo navegável — Saúde Mais · Apenas HTML e CSS · Nomes e dados fictícios</footer>
+</main>
+</body>
+</html>
