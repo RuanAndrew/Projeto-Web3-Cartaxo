@@ -1,38 +1,184 @@
-import { useState } from 'react';
-import { Btn } from '../components/Btn';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
-export default function Login({ onEnter }) {
-  const [role, setRole] = useState('Profissional');
+import Btn from "../components/Btn.jsx";
+
+export default function Login() {
+  const [role, setRole] = useState("doctor");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
+  const navigate = useNavigate();
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    setError("");
+
+    if (!email.trim() || !password) {
+      setError("Preencha o e-mail e a senha para continuar.");
+      return;
+    }
+
+    // Demonstração: não valida credenciais nem cria uma sessão.
+    navigate(role === "patient" ? "/portal" : "/agenda");
+  }
+
   return (
-    <div className="min-h-[80vh] grid md:grid-cols-2 rounded-2xl overflow-hidden border border-petro-100 bg-white">
-      <div className="bg-petro-800 text-white p-10 flex flex-col justify-between">
-        <div className="text-lg font-semibold">Clínica Escuta</div>
-        <div>
-          <h1 className="text-4xl leading-tight">Ouvir bem começa com um bom cuidado.</h1>
-          <p className="mt-4 text-petro-200 max-w-sm">Otorrinolaringologia e fonoaudiologia em um só lugar: prontuário, agenda e acompanhamento do paciente.</p>
+    <main className="login-page">
+      <section className="login-visual">
+        <div className="login-brand">
+          <span className="brand-symbol brand-symbol-light">C</span>
+
+          <div>
+            <strong>Clínica</strong>
+            <small>Plataforma de gestão em saúde</small>
+          </div>
         </div>
-        <div className="text-sm text-petro-200">Seus dados são protegidos conforme a LGPD.</div>
-      </div>
-      <div className="p-10 flex items-center">
-        <div className="w-full max-w-sm mx-auto">
-          <h2 className="text-2xl">Entrar</h2>
-          <div className="mt-5 flex rounded-lg bg-petro-50 p-1" role="tablist">
-            {['Admin','Profissional','Paciente'].map(r =>
-              <button key={r} onClick={() => setRole(r)} className={'flex-1 py-2 text-sm rounded-md font-semibold ' + (role === r ? 'bg-white text-petro-800 shadow-sm' : 'text-petro-600')}>{r}</button>
+
+        <div className="login-visual-content">
+          <span className="login-kicker">CUIDADO CONECTADO</span>
+
+          <h1>
+            Tecnologia a serviço de um cuidado mais humano.
+          </h1>
+
+          <p>
+            Uma experiência integrada para profissionais de saúde e
+            pacientes, do agendamento ao acompanhamento terapêutico.
+          </p>
+
+          <div className="login-feature-list">
+            <div>
+              <span className="feature-check">✓</span>
+              <span>Organização da rotina clínica</span>
+            </div>
+
+            <div>
+              <span className="feature-check">✓</span>
+              <span>Acompanhamento do tratamento</span>
+            </div>
+
+            <div>
+              <span className="feature-check">✓</span>
+              <span>Histórico clínico centralizado</span>
+            </div>
+          </div>
+        </div>
+
+        <p className="login-visual-footer">
+          Plataforma demonstrativa de gestão clínica.
+        </p>
+      </section>
+
+      <section className="login-panel">
+        <div className="login-form-wrapper">
+          <div className="login-mobile-brand">
+            <span className="brand-symbol">C</span>
+            <strong>Clínica</strong>
+          </div>
+
+          <span className="eyebrow">SEJA BEM-VINDO</span>
+
+          <h2 className="login-heading">Acesse sua conta</h2>
+
+          <p className="login-subtitle">
+            Escolha seu perfil e informe seus dados para visualizar
+            a demonstração.
+          </p>
+
+          <form className="login-form" onSubmit={handleSubmit}>
+            <fieldset className="role-fieldset">
+              <legend>Como deseja acessar?</legend>
+
+              <div className="role-selector">
+                <button
+                  type="button"
+                  className={`role-option ${
+                    role === "doctor" ? "role-option-active" : ""
+                  }`}
+                  onClick={() => setRole("doctor")}
+                  aria-pressed={role === "doctor"}
+                >
+                  <span className="role-icon">✚</span>
+                  <span>
+                    <strong>Profissional</strong>
+                    <small>Agenda e prontuários</small>
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`role-option ${
+                    role === "patient" ? "role-option-active" : ""
+                  }`}
+                  onClick={() => setRole("patient")}
+                  aria-pressed={role === "patient"}
+                >
+                  <span className="role-icon">♡</span>
+                  <span>
+                    <strong>Paciente</strong>
+                    <small>Tratamento e exercícios</small>
+                  </span>
+                </button>
+              </div>
+            </fieldset>
+
+            <label className="form-label" htmlFor="email">
+              E-mail
+            </label>
+
+            <input
+              id="email"
+              className="form-input"
+              type="email"
+              autoComplete="username"
+              placeholder="voce@exemplo.com"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+            />
+
+            <label className="form-label" htmlFor="password">
+              Senha
+            </label>
+
+            <input
+              id="password"
+              className="form-input"
+              type="password"
+              autoComplete="current-password"
+              placeholder="Digite sua senha"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
+
+            {error && (
+              <p className="form-error" role="alert">
+                {error}
+              </p>
             )}
+
+            <Btn type="submit" className="login-submit">
+              Entrar na plataforma <span aria-hidden="true">→</span>
+            </Btn>
+          </form>
+
+          <div className="demo-notice">
+            <span aria-hidden="true">ⓘ</span>
+            <p>
+              <strong>Modo de demonstração.</strong> Qualquer e-mail e
+              senha preenchidos permitem acessar as telas fictícias.
+              Nenhuma autenticação real é realizada.
+            </p>
           </div>
-          <label className="block mt-5 text-sm font-semibold">E-mail ou CPF
-            <input className="mt-1 w-full border border-petro-200 rounded-lg px-3 py-2 font-normal" defaultValue="carlos.lima@escuta.com.br"/>
-          </label>
-          <label className="block mt-4 text-sm font-semibold">Senha
-            <input type="password" className="mt-1 w-full border border-petro-200 rounded-lg px-3 py-2 font-normal" defaultValue="12345678"/>
-          </label>
-          <div className="mt-2 text-right">
-            <a href="#" onClick={e => e.preventDefault()} className="text-sm text-petro-600 underline">Esqueci minha senha</a>
-          </div>
-          <Btn className="w-full mt-4" onClick={() => onEnter(role)}>Entrar como {role.toLowerCase()}</Btn>
+
+          <p className="login-legal">
+            Ambiente de prototipação · Dados fictícios
+          </p>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }

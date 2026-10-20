@@ -1,5 +1,16 @@
 # Sistema para Clínica de Otorrinolaringologia e Fonoaudiologia
 
+
+### Como rodar o projeto
+
+Requisitos: Node.js, npm, Docker e Docker Compose.
+
+cd frontend
+
+npm ci
+
+npm run dev
+
 ### Integrantes
 
 * Jennifer de Oliveira

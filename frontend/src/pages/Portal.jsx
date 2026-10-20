@@ -1,68 +1,313 @@
-import { useState } from 'react';
-import { Card } from '../components/Card';
-import { Btn } from '../components/Btn';
+import { useState } from "react";
 
-const EX = [
-  ['Vibração de lábios', '5 min · 3 séries'],
-  ['Sirene com "u"', '3 min · 5 repetições'],
-  ['Escala em "mi-mi-mi"', '4 min · 3 séries'],
-  ['Respiração diafragmática', '5 min']
+import { useToast } from "../components/ToastProvider.jsx";
+import Card from "../components/Card.jsx";
+import Btn from "../components/Btn.jsx";
+
+const initialExercises = [
+  {
+    id: 1,
+    title: "Vibração de lábios",
+    description: "3 séries de 10 repetições",
+    duration: "5 min",
+  },
+  {
+    id: 2,
+    title: "Exercício de respiração",
+    description: "2 séries de 8 repetições",
+    duration: "4 min",
+  },
+  {
+    id: 3,
+    title: "Articulação guiada",
+    description: "Praticar conforme orientação",
+    duration: "6 min",
+  },
 ];
 
 export default function Portal() {
-  const [done, setDone] = useState([true, false, false, false]);
-  const n = done.filter(Boolean).length;
-  const streak = 4 + (n > 0 ? 1 : 0);
-  const xp = 240 + n * 20;
-  const days = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D'];
-  const week = [true, true, true, true, n > 0, false, false];
-  
+  const [completedExercises, setCompletedExercises] = useState([]);
+  const [checkedIn, setCheckedIn] = useState(false);
+  const { showToast } = useToast();
+
+  const completedCount = completedExercises.length;
+
+  const progress = Math.round(
+    (completedCount / initialExercises.length) * 100
+  );
+
+  function toggleExercise(id) {
+    if (checkedIn) return;
+
+    setCompletedExercises((current) =>
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id]
+    );
+  }
+
+  function handleCheckIn() {
+    if (completedCount === 0) {
+      showToast("Marque pelo menos um exercício realizado antes do check-in.");
+      return;
+    }
+
+    setCheckedIn(true);
+    showToast(
+      "Check-in registrado nesta sessão demonstrativa. O progresso ainda não foi salvo no servidor."
+    );
+  }
+
   return (
-    <div className="grid lg:grid-cols-[1fr_320px] gap-6">
-      <section>
-        <h2 className="text-2xl">Olá, Marina</h2>
-        <p className="text-petro-600 mb-4">Seus exercícios de hoje, prescritos pela Dra. Paula Reis.</p>
-        <Card className="divide-y divide-petro-100">
-          {EX.map(([t, d], i) =>
-            <label key={t} className="flex items-center gap-4 p-4 cursor-pointer">
-              <input type="checkbox" className="w-5 h-5 accent-[#155764]" checked={done[i]} onChange={() => setDone(x => x.map((v, j) => j === i ? !v : v))} />
-              <div className="flex-1">
-                <div className={'font-semibold ' + (done[i] ? 'line-through text-petro-500' : '')}>{t}</div>
-                <div className="text-sm text-petro-600">{d}</div>
-              </div>
-              <Btn kind="ghost" className="!py-1" onClick={e => e.preventDefault()}>Ver vídeo</Btn>
-            </label>
-          )}
-        </Card>
-        <p className="mt-3 text-sm text-petro-600">{n} de {EX.length} exercícios concluídos hoje.</p>
+    <div className="patient-page-stack">
+      <section className="patient-welcome">
+        <div>
+          <span className="eyebrow">SEU ESPAÇO DE CUIDADO</span>
+
+          <h2>
+            Olá, João <span aria-hidden="true">👋</span>
+          </h2>
+
+          <p>
+            Cada pequena prática conta. Acompanhe sua evolução e mantenha
+            a regularidade do tratamento.
+          </p>
+        </div>
+
+        <div className="patient-welcome-art" aria-hidden="true">
+          <div className="welcome-art-circle">
+            <span>♡</span>
+          </div>
+        </div>
       </section>
-      <aside className="space-y-4">
-        <Card className="p-5 text-center">
-          <div className="text-5xl">🔥</div>
-          <div className="text-4xl font-semibold mt-1">{streak} dias</div>
-          <div className="text-sm text-petro-600">de ofensiva seguida</div>
-          <div className="flex justify-between mt-4">
-            {days.map((d, i) => 
-              <div key={i} className="text-xs">
-                <div className={'w-8 h-8 rounded-full grid place-items-center mb-1 ' + (week[i] ? 'bg-petro-700 text-white' : 'bg-petro-50 text-petro-500')}>{week[i] ? '✓' : ''}</div>
-                {d}
-              </div>
+
+      <section className="patient-metric-grid">
+        <div className="patient-metric-card streak-card">
+          <div className="patient-metric-top">
+            <span className="patient-metric-icon">✦</span>
+            <span className="patient-metric-label">
+              Ofensiva atual
+            </span>
+          </div>
+
+          <div className="streak-value">
+            12 <span>dias</span>
+          </div>
+
+          <p>Sequência ilustrativa de dias de prática.</p>
+
+          <div className="streak-week">
+            {["S", "T", "Q", "Q", "S", "S", "D"].map(
+              (day, index) => (
+                <div
+                  key={`${day}-${index}`}
+                  className={`streak-day ${
+                    index < 5 ? "streak-day-complete" : ""
+                  }`}
+                >
+                  <span>{day}</span>
+                  <strong>{index < 5 ? "✓" : "·"}</strong>
+                </div>
+              )
             )}
           </div>
-        </Card>
-        <Card className="p-5">
-          <div className="flex justify-between text-sm font-semibold"><span>Nível 3</span><span>{xp}/400 pts</span></div>
-          <div className="h-2.5 rounded-full bg-petro-100 mt-2">
-            <div className="h-full rounded-full bg-petro-600" style={{ width: xp / 4 + '%' }}></div>
+        </div>
+
+        <div className="patient-metric-card">
+          <div className="patient-metric-top">
+            <span className="patient-metric-icon metric-icon-green">
+              ✓
+            </span>
+            <span className="patient-metric-label">
+              Exercícios realizados
+            </span>
           </div>
-          <div className="mt-4 text-sm font-semibold">Conquistas</div>
-          <div className="flex gap-2 mt-2 text-sm flex-wrap">
-            <span className="px-3 py-1 rounded-full bg-petro-100 text-petro-800">Primeira semana</span>
-            <span className="px-3 py-1 rounded-full bg-petro-100 text-petro-800">3 dias seguidos</span>
-            <span className="px-3 py-1 rounded-full bg-petro-50 text-petro-500 border border-dashed border-petro-200">7 dias seguidos</span>
+
+          <div className="patient-metric-value">
+            {completedCount}
+            <span> / {initialExercises.length}</span>
           </div>
+
+          <div
+            className="progress-track"
+            role="progressbar"
+            aria-label="Progresso dos exercícios de hoje"
+            aria-valuemin={0}
+            aria-valuemax={initialExercises.length}
+            aria-valuenow={completedCount}
+          >
+            <div
+              className="progress-bar progress-green"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+
+          <p>{progress}% da rotina concluída hoje.</p>
+        </div>
+
+        <div className="patient-metric-card">
+          <div className="patient-metric-top">
+            <span className="patient-metric-icon metric-icon-purple">
+              ◷
+            </span>
+            <span className="patient-metric-label">
+              Próxima consulta
+            </span>
+          </div>
+
+          <div className="next-appointment-time">14:00</div>
+
+          <strong className="next-appointment-date">Próximo atendimento</strong>
+
+          <p>Horário fictício para demonstração.</p>
+        </div>
+      </section>
+
+      <div className="patient-content-grid">
+        <Card
+          className="patient-exercises-card"
+          title="Seus exercícios de hoje"
+          description="Marque os exercícios conforme você os realiza."
+          action={
+            <span className="date-pill">
+              {completedCount}/{initialExercises.length}
+            </span>
+          }
+        >
+          <div className="exercise-list">
+            {initialExercises.map((exercise) => {
+              const isCompleted = completedExercises.includes(exercise.id);
+
+              return (
+                <label
+                  key={exercise.id}
+                  className={`exercise-row ${
+                    isCompleted ? "exercise-row-completed" : ""
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isCompleted}
+                    disabled={checkedIn}
+                    onChange={() => toggleExercise(exercise.id)}
+                  />
+
+                  <span className="exercise-check-visual">
+                    {isCompleted ? "✓" : ""}
+                  </span>
+
+                  <span className="exercise-copy">
+                    <strong>{exercise.title}</strong>
+                    <small>{exercise.description}</small>
+                  </span>
+
+                  <span className="exercise-duration">
+                    {exercise.duration}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+
+          <div className="exercise-progress-summary">
+            <div>
+              <strong>Seu progresso diário</strong>
+              <span>{progress}%</span>
+            </div>
+
+            <div className="progress-track">
+              <div
+                className="progress-bar progress-blue"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+
+          <Btn
+            block
+            onClick={handleCheckIn}
+            disabled={checkedIn}
+          >
+            {checkedIn ? "✓ Check-in desta sessão concluído" : "Registrar check-in diário"}
+          </Btn>
+
+          {checkedIn && (
+            <p className="checkin-success" role="status">
+              Você registrou sua prática neste protótipo. Seu progresso
+              não está sendo sincronizado com uma conta real.
+            </p>
+          )}
         </Card>
-      </aside>
+
+        <div className="patient-side-stack">
+          <Card
+            title="Seu próximo atendimento"
+            description="Informações da consulta demonstrativa"
+          >
+            <div className="patient-appointment">
+              <div className="patient-appointment-date">
+                <span>OUT</span>
+                <strong>20</strong>
+              </div>
+
+              <div className="patient-appointment-info">
+                <strong>Acompanhamento clínico</strong>
+                <span>14:00 · Horário ilustrativo</span>
+                <span>Profissional de saúde</span>
+              </div>
+            </div>
+
+            <div className="appointment-divider" />
+
+            <button
+              type="button"
+              className="patient-text-action"
+              onClick={() =>
+                showToast("O reagendamento será integrado ao serviço de agenda.")
+              }
+            >
+              Solicitar reagendamento <span aria-hidden="true">→</span>
+            </button>
+          </Card>
+
+          <Card title="Uma mensagem para você">
+            <div className="encouragement">
+              <span className="encouragement-icon">✦</span>
+
+              <p>
+                A regularidade importa mais do que a perfeição. Siga
+                as orientações do seu profissional e respeite seu ritmo.
+              </p>
+            </div>
+          </Card>
+
+          <Card title="Acesso rápido">
+            <div className="patient-shortcuts">
+              <button
+                type="button"
+                onClick={() =>
+                  showToast("O histórico clínico será conectado ao backend.")
+                }
+              >
+                <span>▤</span>
+                <strong>Meu histórico</strong>
+                <span aria-hidden="true">→</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  showToast("A área de receitas será integrada ao backend.")
+                }
+              >
+                <span>＋</span>
+                <strong>Minhas receitas</strong>
+                <span aria-hidden="true">→</span>
+              </button>
+            </div>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
