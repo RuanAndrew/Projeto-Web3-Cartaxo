@@ -1,74 +1,110 @@
-import { useMemo, useState } from "react";
+
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useToast } from "../components/ToastProvider.jsx";
 import Card from "../components/Card.jsx";
 import Btn from "../components/Btn.jsx";
 
-const appointments = [
-  {
-    id: "1",
-    time: "08:30",
-    duration: "40 min",
-    patient: "Ana Beatriz Lima",
-    initials: "AL",
-    specialty: "Otorrinolaringologia",
-    type: "Presencial",
-    status: "Concluída",
-    statusKey: "completed",
-    color: "lavender",
-  },
-  {
-    id: "2",
-    time: "10:00",
-    duration: "50 min",
-    patient: "Pedro Henrique Costa",
-    initials: "PC",
-    specialty: "Fonoaudiologia",
-    type: "Teleconsulta",
-    status: "Confirmada",
-    statusKey: "confirmed",
-    color: "mint",
-  },
-  {
-    id: "3",
-    time: "14:00",
-    duration: "40 min",
-    patient: "João Silva",
-    initials: "JS",
-    specialty: "Otorrinolaringologia",
-    type: "Teleconsulta",
-    status: "Aguardando",
-    statusKey: "waiting",
-    color: "peach",
-  },
-  {
-    id: "4",
-    time: "15:30",
-    duration: "30 min",
-    patient: "Mariana Oliveira",
-    initials: "MO",
-    specialty: "Fonoaudiologia",
-    type: "Presencial",
-    status: "Confirmada",
-    statusKey: "confirmed",
-    color: "blue",
-  },
-];
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:8000"
+).replace(/\/$/, "");
 
 const filters = [
   "Todas",
   "Confirmadas",
   "Aguardando",
   "Concluídas",
+  "Canceladas",
 ];
+
+const initialFormData = {
+  paciente_id: "",
+  profissional_id: "",
+  data: "",
+  horario: "",
+  duracao_minutos: "30",
+};
+
+function initialsFromName(name) {
+  return String(name || "?")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
+
+function formatDateTime(value) {
+  if (!value) return "Data não informada";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Data inválida";
+  }
+
+  return date.toLocaleString("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+}
+
+function formatTime(value) {
+  if (!value) return "--:--";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "--:--";
+
+  return date.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getAppointmentStatus(status) {
+  const statuses = {
+    agendado: {
+      label: "Confirmada",
+      key: "confirmed",
+    },
+    cancelado: {
+      label: "Cancelada",
+      key: "cancelled",
+    },
+    concluido: {
+      label: "Concluída",
+      key: "completed",
+    },
+    concluída: {
+      label: "Concluída",
+      key: "completed",
+    },
+    aguardando: {
+      label: "Aguardando",
+      key: "waiting",
+    },
+  };
+
+  return (
+    statuses[String(status || "").toLowerCase()] || {
+      label: status || "Não informado",
+      key: "waiting",
+    }
+  );
+}
 
 function StatCard({ label, value, description, symbol, tone }) {
   return (
     <div className="stat-card">
       <div className="stat-card-top">
         <span className="stat-label">{label}</span>
-        <span className={`stat-icon stat-icon-${tone}`} aria-hidden="true">
+        <span
+          className={`stat-icon stat-icon-${tone}`}
+          aria-hidden="true"
+        >
           {symbol}
         </span>
       </div>
@@ -79,59 +115,202 @@ function StatCard({ label, value, description, symbol, tone }) {
   );
 }
 
-function initialsFromName(name) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-}
-
 export default function Agenda() {
   const navigate = useNavigate();
-
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState("Todas");
   const { showToast } = useToast();
 
+  const [appointments, setAppointments] = useState([]);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("Todas");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState(initialFormData);
+
+  async function loadAppointments() {
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch(`${API_URL}/agendamentos`);
+
+      if (!response.ok) {
+        throw new Error("Não foi possível carregar os agendamentos.");
+      }
+
+      const data = await response.json();
+
+      if (!Array.isArray(data)) {
+        throw new Error("A API retornou um formato inesperado.");
+      }
+
+      setAppointments(data);
+    } catch (err) {
+      setError(
+        err.message ||
+          "Erro ao carregar os agendamentos. Verifique o backend."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadAppointments();
+  }, []);
+
   const visibleAppointments = useMemo(() => {
+    const search = query.trim().toLowerCase();
+
     return appointments.filter((appointment) => {
-      const search = query.trim().toLowerCase();
+      const status = getAppointmentStatus(appointment.status);
+
+      const patient = `Paciente ${appointment.paciente_id ?? ""}`;
+      const professional = `Profissional ${appointment.profissional_id ?? ""}`;
 
       const matchesSearch =
         !search ||
-        appointment.patient.toLowerCase().includes(search) ||
-        appointment.specialty.toLowerCase().includes(search);
+        patient.toLowerCase().includes(search) ||
+        professional.toLowerCase().includes(search) ||
+        String(appointment.id ?? "").includes(search) ||
+        status.label.toLowerCase().includes(search);
 
       const matchesFilter =
         filter === "Todas" ||
-        (filter === "Confirmadas" &&
-          appointment.status === "Confirmada") ||
-        (filter === "Aguardando" &&
-          appointment.status === "Aguardando") ||
-        (filter === "Concluídas" &&
-          appointment.status === "Concluída");
+        (filter === "Confirmadas" && status.key === "confirmed") ||
+        (filter === "Aguardando" && status.key === "waiting") ||
+        (filter === "Concluídas" && status.key === "completed") ||
+        (filter === "Canceladas" && status.key === "cancelled");
 
       return matchesSearch && matchesFilter;
     });
-  }, [query, filter]);
+  }, [appointments, query, filter]);
+
+  const stats = useMemo(() => {
+    const countByStatus = (key) =>
+      appointments.filter(
+        (appointment) =>
+          getAppointmentStatus(appointment.status).key === key
+      ).length;
+
+    return {
+      total: appointments.length,
+      completed: countByStatus("completed"),
+      waiting: countByStatus("waiting"),
+      cancelled: countByStatus("cancelled"),
+    };
+  }, [appointments]);
 
   function handleNewAppointment() {
-    showToast(
-      "O formulário de agendamento será conectado ao serviço de agenda."
-    );
+    setFormData({ ...initialFormData });
+    setShowForm(true);
+    setError("");
   }
 
-  function handleVideoAppointment(patient) {
-    showToast(
-      `A integração de teleconsulta de ${patient} ainda não está configurada.`
+  function handleFormChange(event) {
+    const { name, value } = event.target;
+
+    setFormData((current) => ({
+      ...current,
+      [name]: value,
+    }));
+  }
+
+  async function handleSubmitAppointment(event) {
+    event.preventDefault();
+
+    if (saving) return;
+
+    const pacienteId = Number(formData.paciente_id);
+    const profissionalId = Number(formData.profissional_id);
+    const duracao = Number(formData.duracao_minutos);
+
+    if (
+      !Number.isInteger(pacienteId) ||
+      pacienteId <= 0 ||
+      !Number.isInteger(profissionalId) ||
+      profissionalId <= 0
+    ) {
+      showToast("Informe IDs válidos para paciente e profissional.");
+      return;
+    }
+
+    if (!formData.data || !formData.horario) {
+      showToast("Preencha a data e o horário da consulta.");
+      return;
+    }
+
+    const dataHora = new Date(
+      `${formData.data}T${formData.horario}:00`
     );
+
+    if (Number.isNaN(dataHora.getTime())) {
+      showToast("Informe uma data e um horário válidos.");
+      return;
+    }
+
+    if (!Number.isInteger(duracao) || duracao <= 0) {
+      showToast("Informe uma duração válida.");
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const response = await fetch(`${API_URL}/agendamentos`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          paciente_id: pacienteId,
+          profissional_id: profissionalId,
+          data_hora: dataHora.toISOString(),
+          duracao_minutos: duracao,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const detail =
+          typeof data.detail === "string"
+            ? data.detail
+            : Array.isArray(data.detail)
+              ? data.detail
+                  .map((item) => item.msg)
+                  .filter(Boolean)
+                  .join(" ")
+              : "";
+
+        throw new Error(
+          detail || "Não foi possível cadastrar o agendamento."
+        );
+      }
+
+      setAppointments((current) => [...current, data]);
+      setShowForm(false);
+      setFormData({ ...initialFormData });
+
+      showToast("Agendamento cadastrado com sucesso!");
+    } catch (err) {
+      showToast(
+        err.message || "Erro ao cadastrar o agendamento."
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   function openRecord(id) {
     navigate(`/prontuario/${id}`);
+  }
+
+  function handleVideoAppointment() {
+    showToast(
+      "A integração de teleconsulta ainda não está configurada."
+    );
   }
 
   return (
@@ -152,18 +331,108 @@ export default function Agenda() {
         </Btn>
       </section>
 
+      {showForm && (
+        <Card
+          title="Novo agendamento"
+          description="Preencha os dados da consulta."
+        >
+          <form onSubmit={handleSubmitAppointment}>
+            <div className="form-grid">
+              <label className="form-field">
+                <span>ID do paciente</span>
+                <input
+                  type="number"
+                  name="paciente_id"
+                  min="1"
+                  value={formData.paciente_id}
+                  onChange={handleFormChange}
+                  placeholder="Ex.: 1"
+                  required
+                />
+              </label>
+
+              <label className="form-field">
+                <span>ID do profissional</span>
+                <input
+                  type="number"
+                  name="profissional_id"
+                  min="1"
+                  value={formData.profissional_id}
+                  onChange={handleFormChange}
+                  placeholder="Ex.: 1"
+                  required
+                />
+              </label>
+
+              <label className="form-field">
+                <span>Data</span>
+                <input
+                  type="date"
+                  name="data"
+                  value={formData.data}
+                  onChange={handleFormChange}
+                  required
+                />
+              </label>
+
+              <label className="form-field">
+                <span>Horário</span>
+                <input
+                  type="time"
+                  name="horario"
+                  value={formData.horario}
+                  onChange={handleFormChange}
+                  required
+                />
+              </label>
+
+              <label className="form-field">
+                <span>Duração</span>
+                <select
+                  name="duracao_minutos"
+                  value={formData.duracao_minutos}
+                  onChange={handleFormChange}
+                >
+                  <option value="15">15 minutos</option>
+                  <option value="30">30 minutos</option>
+                  <option value="40">40 minutos</option>
+                  <option value="45">45 minutos</option>
+                  <option value="50">50 minutos</option>
+                  <option value="60">60 minutos</option>
+                  <option value="90">90 minutos</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="form-actions">
+              <Btn
+                type="button"
+                variant="secondary"
+                onClick={() => setShowForm(false)}
+              >
+                Cancelar
+              </Btn>
+
+              <Btn type="submit" disabled={saving}>
+                {saving ? "Salvando..." : "Salvar agendamento"}
+              </Btn>
+            </div>
+          </form>
+        </Card>
+      )}
+
       <section className="stat-grid" aria-label="Resumo da agenda">
         <StatCard
-          label="Consultas do dia"
-          value="08"
-          description="Atendimentos previstos"
+          label="Total de consultas"
+          value={String(stats.total).padStart(2, "0")}
+          description="Agendamentos cadastrados"
           symbol="◷"
           tone="blue"
         />
 
         <StatCard
           label="Concluídas"
-          value="03"
+          value={String(stats.completed).padStart(2, "0")}
           description="Atendimentos finalizados"
           symbol="✓"
           tone="green"
@@ -171,16 +440,16 @@ export default function Agenda() {
 
         <StatCard
           label="Aguardando"
-          value="02"
-          description="Pacientes pendentes"
+          value={String(stats.waiting).padStart(2, "0")}
+          description="Status não identificado"
           symbol="◉"
           tone="orange"
         />
 
         <StatCard
-          label="Teleconsultas"
-          value="03"
-          description="Atendimentos remotos"
+          label="Canceladas"
+          value={String(stats.cancelled).padStart(2, "0")}
+          description="Agendamentos cancelados"
           symbol="⌘"
           tone="purple"
         />
@@ -201,7 +470,7 @@ export default function Agenda() {
 
           <input
             type="search"
-            aria-label="Buscar paciente ou especialidade"
+            aria-label="Buscar paciente ou profissional"
             placeholder="Buscar paciente..."
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -233,15 +502,28 @@ export default function Agenda() {
         <Card
           className="appointments-card"
           title="Programação do dia"
-          description="Horários ilustrativos para demonstração"
-          action={<span className="date-pill">Agenda demonstrativa</span>}
+          description="Agendamentos carregados do sistema"
+          action={<span className="date-pill">Agenda integrada</span>}
         >
-          {visibleAppointments.length === 0 ? (
+          {loading ? (
+            <div className="empty-state">
+              <strong>Carregando agendamentos...</strong>
+            </div>
+          ) : error ? (
+            <div className="empty-state">
+              <strong>Não foi possível carregar a agenda</strong>
+              <p>{error}</p>
+
+              <Btn variant="secondary" onClick={loadAppointments}>
+                Tentar novamente
+              </Btn>
+            </div>
+          ) : visibleAppointments.length === 0 ? (
             <div className="empty-state">
               <span className="empty-state-icon">⌕</span>
               <strong>Nenhum atendimento encontrado</strong>
               <p>
-                Tente outro nome ou selecione um filtro diferente.
+                Tente outro termo ou selecione um filtro diferente.
               </p>
 
               <Btn
@@ -256,76 +538,86 @@ export default function Agenda() {
             </div>
           ) : (
             <div className="appointment-list">
-              {visibleAppointments.map((appointment) => (
-                <article
-                  className="appointment-row"
-                  key={appointment.id}
-                >
-                  <div className="appointment-time">
-                    <strong>{appointment.time}</strong>
-                    <span>{appointment.duration}</span>
-                  </div>
+              {visibleAppointments.map((appointment, index) => {
+                const status = getAppointmentStatus(appointment.status);
+                const patient = `Paciente ${appointment.paciente_id}`;
+                const colorClasses = [
+                  "lavender",
+                  "mint",
+                  "peach",
+                  "blue",
+                ];
 
-                  <div
-                    className={`patient-avatar avatar-${appointment.color}`}
-                    aria-hidden="true"
+                return (
+                  <article
+                    className="appointment-row"
+                    key={appointment.id}
                   >
-                    {appointment.initials}
-                  </div>
+                    <div className="appointment-time">
+                      <strong>{formatTime(appointment.data_hora)}</strong>
+                      <span>{appointment.duracao_minutos} min</span>
+                    </div>
 
-                  <div className="appointment-info">
-                    <div className="appointment-patient-line">
-                      <h4>{appointment.patient}</h4>
+                    <div
+                      className={`patient-avatar avatar-${
+                        colorClasses[index % colorClasses.length]
+                      }`}
+                      aria-hidden="true"
+                    >
+                      {initialsFromName(patient)}
+                    </div>
 
-                      <span
-                        className={`status-pill status-${appointment.statusKey}`}
-                      >
-                        {appointment.status}
+                    <div className="appointment-info">
+                      <div className="appointment-patient-line">
+                        <h4>{patient}</h4>
+
+                        <span
+                          className={`status-pill status-${status.key}`}
+                        >
+                          {status.label}
+                        </span>
+                      </div>
+
+                      <p>
+                        Profissional {appointment.profissional_id}
+                      </p>
+
+                      <span className="appointment-type">
+                        <span aria-hidden="true">⌖</span>
+                        Consulta · {formatDateTime(appointment.data_hora)}
                       </span>
                     </div>
 
-                    <p>{appointment.specialty}</p>
+                    <div className="appointment-actions">
+                      {status.key === "confirmed" && (
+                        <Btn
+                          variant="outline"
+                          size="small"
+                          onClick={handleVideoAppointment}
+                        >
+                          Teleconsulta
+                        </Btn>
+                      )}
 
-                    <span className="appointment-type">
-                      <span aria-hidden="true">
-                        {appointment.type === "Teleconsulta"
-                          ? "⌘"
-                          : "⌖"}
-                      </span>
-
-                      {appointment.type}
-                    </span>
-                  </div>
-
-                  <div className="appointment-actions">
-                    {appointment.type === "Teleconsulta" && (
                       <Btn
-                        variant="outline"
+                        variant={
+                          status.key === "completed"
+                            ? "secondary"
+                            : "primary"
+                        }
                         size="small"
                         onClick={() =>
-                          handleVideoAppointment(appointment.patient)
+                          openRecord(appointment.paciente_id)
                         }
                       >
-                        Teleconsulta
+                        {status.key === "completed"
+                          ? "Ver prontuário"
+                          : "Atender"}
                       </Btn>
-                    )}
-
-                    <Btn
-                      variant={
-                        appointment.status === "Concluída"
-                          ? "secondary"
-                          : "primary"
-                      }
-                      size="small"
-                      onClick={() => openRecord(appointment.id)}
-                    >
-                      {appointment.status === "Concluída"
-                        ? "Ver prontuário"
-                        : "Atender"}
-                    </Btn>
-                  </div>
-                </article>
-              ))}
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           )}
         </Card>
@@ -333,33 +625,42 @@ export default function Agenda() {
         <aside className="agenda-aside">
           <Card
             title="Resumo da rotina"
-            description="Distribuição ilustrativa dos atendimentos"
+            description="Distribuição dos agendamentos cadastrados"
           >
             <div className="schedule-summary">
               <div className="schedule-summary-row">
                 <span className="schedule-dot dot-blue" />
-                <span>Presenciais</span>
-                <strong>05</strong>
+                <span>Agendadas</span>
+                <strong>
+                  {appointments.filter(
+                    (item) => item.status === "agendado"
+                  ).length.toString().padStart(2, "0")}
+                </strong>
               </div>
 
               <div className="schedule-summary-row">
                 <span className="schedule-dot dot-purple" />
-                <span>Teleconsultas</span>
-                <strong>03</strong>
+                <span>Canceladas</span>
+                <strong>
+                  {stats.cancelled.toString().padStart(2, "0")}
+                </strong>
               </div>
 
               <div className="schedule-summary-row">
                 <span className="schedule-dot dot-green" />
-                <span>Finalizadas</span>
-                <strong>03</strong>
+                <span>Concluídas</span>
+                <strong>
+                  {stats.completed.toString().padStart(2, "0")}
+                </strong>
               </div>
             </div>
 
             <div className="schedule-note">
               <span aria-hidden="true">ⓘ</span>
               <p>
-                Os indicadores são fictícios e serão calculados a partir
-                dos dados reais da agenda após a integração com o backend.
+                Os dados são carregados do serviço de agendamentos.
+                Os nomes e as especialidades dependem da integração
+                com os cadastros de pacientes e profissionais.
               </p>
             </div>
           </Card>
@@ -369,12 +670,20 @@ export default function Agenda() {
               <button
                 type="button"
                 className="quick-action"
-                onClick={() => openRecord("1")}
+                onClick={() => {
+                  const firstAppointment = appointments[0];
+
+                  if (firstAppointment) {
+                    openRecord(firstAppointment.paciente_id);
+                  } else {
+                    showToast("Não há pacientes na agenda.");
+                  }
+                }}
               >
                 <span className="quick-action-icon">▤</span>
                 <span>
                   <strong>Prontuário clínico</strong>
-                  <small>Consultar registro demonstrativo</small>
+                  <small>Consultar paciente agendado</small>
                 </span>
                 <span aria-hidden="true">→</span>
               </button>
@@ -387,7 +696,7 @@ export default function Agenda() {
                 <span className="quick-action-icon">＋</span>
                 <span>
                   <strong>Novo agendamento</strong>
-                  <small>Fluxo a ser integrado</small>
+                  <small>Cadastrar uma consulta</small>
                 </span>
                 <span aria-hidden="true">→</span>
               </button>
