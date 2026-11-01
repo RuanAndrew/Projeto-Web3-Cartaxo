@@ -12,6 +12,7 @@ import Agenda from "./pages/Agenda.jsx";
 import Prontuario from "./pages/Prontuario.jsx";
 import Prontuarios from "./pages/Prontuarios.jsx";
 import Portal from "./pages/Portal.jsx";
+import { Pacientes, PatientProfile } from "./pages/Pacientes.jsx";
 
 import DoctorLayout from "./layouts/DoctorLayout/index.jsx";
 import PatientLayout from "./layouts/PatientLayout/index.jsx";
@@ -25,6 +26,7 @@ export default function App() {
 
           <Route element={<DoctorLayout />}>
             <Route path="/agenda" element={<Agenda />} />
+            <Route path="/pacientes" element={<Pacientes />} />
             <Route
               path="/prontuarios"
               element={<Prontuarios />}
@@ -37,6 +39,7 @@ export default function App() {
 
           <Route element={<PatientLayout />}>
             <Route path="/portal" element={<Portal />} />
+            <Route path="/perfil" element={<PatientProfile />} />
           </Route>
 
           <Route

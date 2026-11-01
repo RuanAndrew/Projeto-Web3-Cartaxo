@@ -17,6 +17,13 @@ const navigation = [
     icon: "▤",
     end: true,
   },
+  {
+    label: "Pacientes",
+    description: "Cadastro e contatos",
+    path: "/pacientes",
+    icon: "♙",
+    end: true,
+  },
 ];
 
 export default function DoctorLayout() {
@@ -26,6 +33,8 @@ export default function DoctorLayout() {
 
   const pageTitle = location.pathname.startsWith("/prontuario/")
   ? "Prontuário eletrônico"
+  : location.pathname === "/pacientes"
+    ? "Pacientes"
   : location.pathname === "/prontuarios"
     ? "Prontuários"
     : "Agenda clínica";
@@ -90,17 +99,6 @@ export default function DoctorLayout() {
 
         <div className="sidebar-section-label sidebar-section-spaced">
           OUTROS MÓDULOS
-        </div>
-
-        <div className="sidebar-coming-soon">
-          <span className="nav-icon" aria-hidden="true">
-            ♧
-          </span>
-
-          <span>
-            <strong>Pacientes</strong>
-            <small>Em desenvolvimento</small>
-          </span>
         </div>
 
         <div className="sidebar-coming-soon">

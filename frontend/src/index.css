@@ -117,6 +117,23 @@ p {
   background: #dce6ff;
 }
 
+.patient-admin { width: 100%; }
+.patient-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; }
+.patient-form label { display: flex; flex-direction: column; gap: 6px; color: #38445b; font-size: 12px; font-weight: 650; }
+.patient-form input, .patient-form select, .patient-filters input, .patient-filters select { width: 100%; min-height: 40px; padding: 8px 10px; color: #202b40; background: white; border: 1px solid var(--color-border); border-radius: 8px; }
+.patient-wide { grid-column: span 2; }
+.patient-form-actions { grid-column: 1 / -1; display: flex; gap: 9px; }
+.patient-filters { display: grid; grid-template-columns: minmax(220px, 1fr) 150px auto; align-items: center; gap: 12px; margin-bottom: 18px; color: var(--color-muted); }
+.patient-table-wrap { overflow-x: auto; }
+.patient-table { width: 100%; border-collapse: collapse; text-align: left; }
+.patient-table th, .patient-table td { padding: 12px 10px; border-bottom: 1px solid var(--color-border); white-space: nowrap; }
+.patient-table th { color: var(--color-muted); font-size: 11px; text-transform: uppercase; }
+.patient-table td .btn { margin-right: 6px; }
+.patient-pagination { display: flex; justify-content: flex-end; align-items: center; gap: 12px; padding-top: 16px; }
+.patient-error { padding: 12px; color: #9c2639; background: #ffedf0; border-radius: 8px; }
+@media (max-width: 760px) { .patient-form { grid-template-columns: 1fr 1fr; } .patient-filters { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { .patient-form { grid-template-columns: 1fr; } .patient-wide { grid-column: auto; } }
+
 /* =========================================================
    2. BOTÕES E COMPONENTES COMPARTILHADOS
    ========================================================= */

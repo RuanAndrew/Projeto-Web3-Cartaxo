@@ -39,6 +39,26 @@ services:
       start_period: 60s
     networks: [clinica-net]
 
+  pacientes-db:
+    image: postgres:16-alpine
+    container_name: pacientes-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PACIENTES_DB_USER:-pacientes_user}
+      POSTGRES_PASSWORD: ${PACIENTES_DB_PASSWORD:-pacientes_pass}
+      POSTGRES_DB: ${PACIENTES_DB_NAME:-pacientes_db}
+    volumes:
+      - pacientes_db_data:/var/lib/postgresql/data
+    ports:
+      - "5437:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PACIENTES_DB_USER:-pacientes_user} -d ${PACIENTES_DB_NAME:-pacientes_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks: [clinica-net]
+
   clinico-db:
     image: postgres:16-alpine
     container_name: clinico-db
@@ -165,6 +185,24 @@ services:
       - ./backend/agendamento-service:/app
     networks: [clinica-net]
 
+  pacientes-service:
+    build:
+      context: ./backend/pacientes-service
+      dockerfile: Dockerfile
+    container_name: pacientes-service
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${PACIENTES_DB_USER:-pacientes_user}:${PACIENTES_DB_PASSWORD:-pacientes_pass}@pacientes-db:5432/${PACIENTES_DB_NAME:-pacientes_db}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-changeme-super-secret}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+    depends_on:
+      pacientes-db: {condition: service_healthy}
+    ports:
+      - "8005:8000"
+    volumes:
+      - ./backend/pacientes-service:/app
+    networks: [clinica-net]
+
   clinico-service:
     build:
       context: ./backend/clinico-service
@@ -223,6 +261,7 @@ services:
     environment:
       AUTH_SERVICE_URL: http://auth-service:8000
       AGENDAMENTO_SERVICE_URL: http://agendamento-service:8000
+      PACIENTES_SERVICE_URL: http://pacientes-service:8000
       CLINICO_SERVICE_URL: http://clinico-service:8000
       NOTIFICACAO_SERVICE_URL: http://notificacao-service:8000
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-changeme-super-secret}
@@ -230,6 +269,7 @@ services:
     depends_on:
       - auth-service
       - agendamento-service
+      - pacientes-service
       - clinico-service
       - notificacao-service
     ports:
@@ -259,6 +299,7 @@ services:
 volumes:
   auth_db_data:
   agendamento_db_data:
+  pacientes_db_data:
   clinico_db_data:
   notificacao_db_data:
   redis_data:

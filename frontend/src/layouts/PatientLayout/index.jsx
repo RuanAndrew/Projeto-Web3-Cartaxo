@@ -26,6 +26,15 @@ export default function PatientLayout() {
               Meu tratamento
             </NavLink>
 
+            <NavLink
+              to="/perfil"
+              className={({ isActive }) =>
+                `patient-nav-link ${isActive ? "patient-nav-link-active" : ""}`
+              }
+            >
+              Meu perfil
+            </NavLink>
+
             <Link to="/" className="patient-logout">
               Sair <span aria-hidden="true">↗</span>
             </Link>
