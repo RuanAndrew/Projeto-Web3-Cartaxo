@@ -89,6 +89,27 @@ export default function DoctorLayout() {
         </nav>
 
         <div className="sidebar-section-label sidebar-section-spaced">
+          ADMINISTRAÇÃO
+        </div>
+
+        <nav className="doctor-navigation" aria-label="Administração">
+          <NavLink
+            to="/admin/profissionais"
+            onClick={() => setMenuOpen(false)}
+            className="nav-link"
+          >
+            <span className="nav-icon" aria-hidden="true">
+              ⚙
+            </span>
+
+            <span className="nav-copy">
+              <strong>Painel Admin</strong>
+              <small>Profissionais, especialidades e agendas</small>
+            </span>
+          </NavLink>
+        </nav>
+
+        <div className="sidebar-section-label sidebar-section-spaced">
           OUTROS MÓDULOS
         </div>
 
