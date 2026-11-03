@@ -1,0 +1,82 @@
+name: documentos-service
+
+on:
+  pull_request:
+    paths:
+      - "backend/documentos-service/**"
+      - ".github/workflows/documentos-service.yml"
+      - "docker-compose.yml"
+  push:
+    branches: [main, develop]
+    paths:
+      - "backend/documentos-service/**"
+      - ".github/workflows/documentos-service.yml"
+      - "docker-compose.yml"
+
+concurrency:
+  group: documentos-service-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: backend/documentos-service
+
+    env:
+      DATABASE_URL: postgresql+psycopg2://documentos_user:documentos_pass@localhost:5437/documentos_db
+      S3_ENDPOINT_URL: http://localhost:9000
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin123
+      AWS_S3_BUCKET: clinica-documentos
+      JWT_SECRET_KEY: segredo-somente-para-ci
+
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/documentos-service/requirements.txt
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Subir Postgres e MinIO
+        working-directory: .
+        run: docker compose up -d --wait documentos-db minio
+
+      - name: Aguardar o MinIO responder
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:9000/minio/health/live; then
+              echo "MinIO pronto"; exit 0
+            fi
+            sleep 2
+          done
+          echo "MinIO não respondeu a tempo"; exit 1
+
+      - name: Testes unitários
+        run: pytest -m "not integration" -v
+
+      - name: Testes de integração
+        run: pytest -m integration -v -rs
+
+      - name: Logs da infraestrutura (em caso de falha)
+        if: failure()
+        working-directory: .
+        run: docker compose logs documentos-db minio
+
+      - name: Derrubar a infraestrutura
+        if: always()
+        working-directory: .
+        run: docker compose down -v
