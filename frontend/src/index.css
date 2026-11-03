@@ -3318,3 +3318,24 @@ p {
     width: 100%;
   }
 }
+
+/* Receitas do paciente */
+.receitas-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.receitas-list .document-row:last-child {
+  border-bottom: 0;
+}
+
+.receitas-feedback {
+  padding: 28px 8px;
+  color: var(--color-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.receitas-feedback .btn {
+  margin-top: 12px;
+}
