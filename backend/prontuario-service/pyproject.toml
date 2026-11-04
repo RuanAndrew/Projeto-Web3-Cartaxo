@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "prontuario-service"
+version = "1.0.0"
+description = "API de prontuarios clinicos da Clinica"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110,<1.0",
+    "uvicorn[standard]>=0.29,<1.0",
+]
+
+[tool.setuptools]
+py-modules = ["main"]

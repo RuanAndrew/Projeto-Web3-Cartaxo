@@ -191,6 +191,20 @@ services:
       - ./backend/clinico-service:/app
     networks: [clinica-net]
 
+  prontuario-service:
+    build:
+      context: ./backend/prontuario-service
+      dockerfile: Dockerfile
+    container_name: prontuario-service
+    restart: unless-stopped
+    environment:
+      PRONTUARIO_DATABASE_PATH: /data/prontuario.db
+    ports:
+      - "8005:8000"
+    volumes:
+      - prontuario_data:/data
+    networks: [clinica-net]
+
   notificacao-service:
     build:
       context: ./backend/notificacao-service
@@ -262,6 +276,8 @@ volumes:
   clinico_db_data:
   notificacao_db_data:
   redis_data:
+
+  prontuario_data:
   rabbitmq_data:
 
 networks:
