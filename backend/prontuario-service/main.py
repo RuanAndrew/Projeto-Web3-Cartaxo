@@ -234,3 +234,23 @@ def update_prontuario(
 		).fetchone()
 
 	return row_to_response(row)
+
+
+@app.delete(
+    "/prontuarios/{prontuario_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["prontuarios"],
+)
+
+def delete_prontuario(prontuario_id: UUID) -> None:
+    with get_connection() as connection:
+        cursor = connection.execute(
+            "DELETE FROM prontuarios WHERE id = ?",
+            (str(prontuario_id),),
+        )
+
+        if cursor.rowcount == 0:
+            raise HTTPException(
+                status_code=404,
+                detail="Prontuário não encontrado",
+            )
