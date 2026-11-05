@@ -98,6 +98,25 @@ services:
       retries: 5
     networks: [clinica-net]
 
+  profissionais-db:
+    image: postgres:16-alpine
+    container_name: profissionais-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PROFISSIONAIS_DB_USER:-profissionais_user}
+      POSTGRES_PASSWORD: ${PROFISSIONAIS_DB_PASSWORD:-profissionais_pass}
+      POSTGRES_DB: ${PROFISSIONAIS_DB_NAME:-profissionais_db}
+    volumes:
+      - profissionais_db_data:/var/lib/postgresql/data
+    ports:
+      - "5438:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PROFISSIONAIS_DB_USER:-profissionais_user} -d ${PROFISSIONAIS_DB_NAME:-profissionais_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks: [clinica-net]
+
   redis:
     image: redis:7-alpine
     container_name: redis
@@ -273,6 +292,22 @@ services:
       - ./backend/documentos-service:/app
     networks: [clinica-net]
 
+  ms-profissionais:
+    build:
+      context: ./backend/ms-profissionais
+      dockerfile: Dockerfile
+    container_name: ms-profissionais
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://${PROFISSIONAIS_DB_USER:-profissionais_user}:${PROFISSIONAIS_DB_PASSWORD:-profissionais_pass}@profissionais-db:5432/${PROFISSIONAIS_DB_NAME:-profissionais_db}
+    depends_on:
+      profissionais-db: {condition: service_healthy}
+    ports:
+      - "8006:8000"
+    volumes:
+      - ./backend/ms-profissionais/src:/app/src
+    networks: [clinica-net]
+
   api-gateway:
     build:
       context: ./backend/api-gateway
@@ -326,6 +361,7 @@ volumes:
   redis_data:
   rabbitmq_data:
   documentos_db_data:
+  profissionais_db_data:
   minio_data:
 
 networks:

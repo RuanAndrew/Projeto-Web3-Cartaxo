@@ -21,7 +21,13 @@ export default function Login() {
     }
 
     // Demonstração: não valida credenciais nem cria uma sessão.
-    navigate(role === "patient" ? "/portal" : "/agenda");
+    navigate(
+      role === "patient"
+        ? "/portal"
+        : role === "admin"
+          ? "/admin/profissionais"
+          : "/agenda"
+    );
   }
 
   return (
@@ -119,6 +125,21 @@ export default function Login() {
                   <span>
                     <strong>Paciente</strong>
                     <small>Tratamento e exercícios</small>
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`role-option ${
+                    role === "admin" ? "role-option-active" : ""
+                  }`}
+                  onClick={() => setRole("admin")}
+                  aria-pressed={role === "admin"}
+                >
+                  <span className="role-icon">⚙</span>
+                  <span>
+                    <strong>Administrador</strong>
+                    <small>Profissionais e agendas</small>
                   </span>
                 </button>
               </div>
