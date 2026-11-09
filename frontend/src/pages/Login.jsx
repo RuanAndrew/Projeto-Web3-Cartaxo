@@ -3,6 +3,75 @@ import { useNavigate } from "react-router-dom";
 
 import Btn from "../components/Btn.jsx";
 
+const ROLE_OPTIONS = [
+  {
+    id: "doctor",
+    label: "Médico",
+    title: "Área Médica",
+    description: "Agenda clínica, atendimentos e prontuários eletrônicos.",
+    placeholder: "medico@clinica.com.br",
+    route: "/agenda",
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3" />
+        <path d="M8 15v1a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6v-4" />
+        <circle cx="20" cy="10" r="2" />
+      </svg>
+    ),
+  },
+  {
+    id: "patient",
+    label: "Paciente",
+    title: "Portal do Paciente",
+    description: "Acompanhamento do tratamento, exercícios diários e receitas.",
+    placeholder: "paciente@exemplo.com",
+    route: "/portal",
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+      </svg>
+    ),
+  },
+  {
+    id: "admin",
+    label: "Admin",
+    title: "Painel Administrativo",
+    description: "Gestão de profissionais, especialidades e configuração de agendas.",
+    placeholder: "admin@clinica.com.br",
+    route: "/admin/profissionais",
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
+        <path d="m9 12 2 2 4-4" />
+      </svg>
+    ),
+  },
+];
+
 export default function Login() {
   const [role, setRole] = useState("doctor");
   const [email, setEmail] = useState("");
@@ -10,6 +79,9 @@ export default function Login() {
   const [error, setError] = useState("");
 
   const navigate = useNavigate();
+
+  const activeRole =
+    ROLE_OPTIONS.find((option) => option.id === role) || ROLE_OPTIONS[0];
 
   function handleSubmit(event) {
     event.preventDefault();
@@ -21,13 +93,7 @@ export default function Login() {
     }
 
     // Demonstração: não valida credenciais nem cria uma sessão.
-    navigate(
-      role === "patient"
-        ? "/portal"
-        : role === "admin"
-          ? "/admin/profissionais"
-          : "/agenda"
-    );
+    navigate(activeRole.route);
   }
 
   return (
@@ -89,59 +155,48 @@ export default function Login() {
           <h2 className="login-heading">Acesse sua conta</h2>
 
           <p className="login-subtitle">
-            Escolha seu perfil e informe seus dados para visualizar
-            a demonstração.
+            Escolha seu perfil de acesso e informe seus dados para
+            entrar na plataforma.
           </p>
 
           <form className="login-form" onSubmit={handleSubmit}>
             <fieldset className="role-fieldset">
-              <legend>Como deseja acessar?</legend>
+              <legend>Perfil de acesso</legend>
 
-              <div className="role-selector">
-                <button
-                  type="button"
-                  className={`role-option ${
-                    role === "doctor" ? "role-option-active" : ""
-                  }`}
-                  onClick={() => setRole("doctor")}
-                  aria-pressed={role === "doctor"}
-                >
-                  <span className="role-icon">✚</span>
-                  <span>
-                    <strong>Profissional</strong>
-                    <small>Agenda e prontuários</small>
-                  </span>
-                </button>
+              {/* Seletor Segmentado Elegante (Médico | Paciente | Admin) */}
+              <div
+                className="role-segmented"
+                role="tablist"
+                aria-label="Selecione o perfil de acesso"
+              >
+                {ROLE_OPTIONS.map((option) => {
+                  const isActive = role === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      className={`role-segment ${
+                        isActive ? "role-segment-active" : ""
+                      }`}
+                      onClick={() => setRole(option.id)}
+                    >
+                      <span className="role-segment-icon">{option.icon}</span>
+                      <span className="role-segment-label">{option.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
 
-                <button
-                  type="button"
-                  className={`role-option ${
-                    role === "patient" ? "role-option-active" : ""
-                  }`}
-                  onClick={() => setRole("patient")}
-                  aria-pressed={role === "patient"}
-                >
-                  <span className="role-icon">♡</span>
-                  <span>
-                    <strong>Paciente</strong>
-                    <small>Tratamento e exercícios</small>
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  className={`role-option ${
-                    role === "admin" ? "role-option-active" : ""
-                  }`}
-                  onClick={() => setRole("admin")}
-                  aria-pressed={role === "admin"}
-                >
-                  <span className="role-icon">⚙</span>
-                  <span>
-                    <strong>Administrador</strong>
-                    <small>Profissionais e agendas</small>
-                  </span>
-                </button>
+              {/* Resumo Contextual do Perfil Selecionado */}
+              <div className="role-context-card" aria-live="polite">
+                <span className="role-context-icon">{activeRole.icon}</span>
+                <div className="role-context-copy">
+                  <strong>{activeRole.title}</strong>
+                  <small>{activeRole.description}</small>
+                </div>
+                <span className="role-context-badge">{activeRole.label}</span>
               </div>
             </fieldset>
 
@@ -154,7 +209,7 @@ export default function Login() {
               className="form-input"
               type="email"
               autoComplete="username"
-              placeholder="voce@exemplo.com"
+              placeholder={activeRole.placeholder}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               required
@@ -182,7 +237,8 @@ export default function Login() {
             )}
 
             <Btn type="submit" className="login-submit">
-              Entrar na plataforma <span aria-hidden="true">→</span>
+              <span>Entrar como {activeRole.label}</span>
+              <span aria-hidden="true">→</span>
             </Btn>
           </form>
 
