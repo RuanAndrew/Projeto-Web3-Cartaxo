@@ -9,11 +9,12 @@ class Settings(BaseSettings):
 
     # Um serviço por linha: para expor um novo, adicione a URL aqui e a rota em routers/proxy.py.
     documentos_service_url: str = "http://documentos-service:8000"
+    agendamento_service_url: str = "http://agendamento-service:8000"
 
     # Origens do frontend permitidas pelo navegador (separadas por vírgula).
     cors_origins: str = "http://localhost:5173"
 
-    tamanho_maximo_requisicao_bytes: int = 12 * 1024 * 1024
+    tamanho_maximo_requisicao_bytes: int = 12 * 1024 * 1024 # 12 MB
     timeout_segundos: float = 30.0
 
     @property

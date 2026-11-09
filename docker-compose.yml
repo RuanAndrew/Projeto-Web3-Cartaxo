@@ -205,6 +205,7 @@ services:
     container_name: agendamento-service
     restart: unless-stopped
     environment:
+      PYTHONPATH: /app:/app/src
       DATABASE_URL: postgresql+asyncpg://${AGENDAMENTO_DB_USER:-agendamento_user}:${AGENDAMENTO_DB_PASSWORD:-agendamento_pass}@agendamento-db:5432/${AGENDAMENTO_DB_NAME:-agendamento_db}
       REDIS_URL: redis://redis:6379/1
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-clinica}:${RABBITMQ_PASSWORD:-clinica123}@rabbitmq:5672/

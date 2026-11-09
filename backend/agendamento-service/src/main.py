@@ -7,8 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from infrastructure.database.connection import Base, engine, get_db
-from models import AgendamentoDB
+from .infrastructure.database.connection import Base, engine, get_db
+from src.models import AgendamentoDB
 
 
 app = FastAPI(
