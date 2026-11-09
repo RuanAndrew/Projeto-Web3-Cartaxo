@@ -79,6 +79,44 @@ services:
       start_period: 60s
     networks: [clinica-net]
 
+  documentos-db:
+    image: postgres:16-alpine
+    container_name: documentos-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DOCUMENTOS_DB_USER:-documentos_user}
+      POSTGRES_PASSWORD: ${DOCUMENTOS_DB_PASSWORD:-documentos_pass}
+      POSTGRES_DB: ${DOCUMENTOS_DB_NAME:-documentos_db}
+    volumes:
+      - documentos_db_data:/var/lib/postgresql/data
+    ports:
+      - "5437:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DOCUMENTOS_DB_USER:-documentos_user} -d ${DOCUMENTOS_DB_NAME:-documentos_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks: [clinica-net]
+
+  profissionais-db:
+    image: postgres:16-alpine
+    container_name: profissionais-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PROFISSIONAIS_DB_USER:-profissionais_user}
+      POSTGRES_PASSWORD: ${PROFISSIONAIS_DB_PASSWORD:-profissionais_pass}
+      POSTGRES_DB: ${PROFISSIONAIS_DB_NAME:-profissionais_db}
+    volumes:
+      - profissionais_db_data:/var/lib/postgresql/data
+    ports:
+      - "5438:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PROFISSIONAIS_DB_USER:-profissionais_user} -d ${PROFISSIONAIS_DB_NAME:-profissionais_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks: [clinica-net]
+
   redis:
     image: redis:7-alpine
     container_name: redis
@@ -121,6 +159,22 @@ services:
 
     networks:
       - clinica-net
+
+  minio:
+    image: alpine/minio:RELEASE.2025-10-15T17-29-55Z
+    container_name: minio
+    restart: unless-stopped
+    user: "0:0"
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks: [clinica-net]
 
   auth-service:
     build:
@@ -214,6 +268,46 @@ services:
       - ./backend/notificacao-service:/app
     networks: [clinica-net]
 
+  documentos-service:
+    build:
+      context: ./backend/documentos-service
+      dockerfile: Dockerfile
+    container_name: documentos-service
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${DOCUMENTOS_DB_USER:-documentos_user}:${DOCUMENTOS_DB_PASSWORD:-documentos_pass}@documentos-db:5432/${DOCUMENTOS_DB_NAME:-documentos_db}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-changeme-super-secret}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      AWS_S3_BUCKET: clinica-documentos
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_PUBLIC_ENDPOINT_URL: http://localhost:9000
+    depends_on:
+      documentos-db: {condition: service_healthy}
+      minio: {condition: service_started}
+    ports:
+      - "8005:8000"
+    volumes:
+      - ./backend/documentos-service:/app
+    networks: [clinica-net]
+
+  ms-profissionais:
+    build:
+      context: ./backend/ms-profissionais
+      dockerfile: Dockerfile
+    container_name: ms-profissionais
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://${PROFISSIONAIS_DB_USER:-profissionais_user}:${PROFISSIONAIS_DB_PASSWORD:-profissionais_pass}@profissionais-db:5432/${PROFISSIONAIS_DB_NAME:-profissionais_db}
+    depends_on:
+      profissionais-db: {condition: service_healthy}
+    ports:
+      - "8006:8000"
+    volumes:
+      - ./backend/ms-profissionais/src:/app/src
+    networks: [clinica-net]
+
   api-gateway:
     build:
       context: ./backend/api-gateway
@@ -225,6 +319,8 @@ services:
       AGENDAMENTO_SERVICE_URL: http://agendamento-service:8000
       CLINICO_SERVICE_URL: http://clinico-service:8000
       NOTIFICACAO_SERVICE_URL: http://notificacao-service:8000
+      DOCUMENTOS_SERVICE_URL: http://documentos-service:8000
+      CORS_ORIGINS: http://localhost:5173
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-changeme-super-secret}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
     depends_on:
@@ -232,6 +328,7 @@ services:
       - agendamento-service
       - clinico-service
       - notificacao-service
+      - documentos-service
     ports:
       - "8000:8000"
     volumes:
@@ -263,6 +360,9 @@ volumes:
   notificacao_db_data:
   redis_data:
   rabbitmq_data:
+  documentos_db_data:
+  profissionais_db_data:
+  minio_data:
 
 networks:
   clinica-net:
