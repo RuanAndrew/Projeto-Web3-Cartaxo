@@ -123,8 +123,13 @@ export default function DoctorLayout() {
           <span className="brand-symbol">C</span>
 
           <span className="brand-copy">
-            <strong>Clínica</strong>
-            <small>Gestão de saúde</small>
+            <span className="brand-title-row">
+              <strong>Clínica</strong>
+              <span className="workspace-role-tag workspace-role-tag-doctor">
+                Médico
+              </span>
+            </span>
+            <small>Área clínica</small>
           </span>
         </Link>
 
@@ -245,6 +250,10 @@ export default function DoctorLayout() {
           </div>
 
           <div className="topbar-right">
+            <span className="topbar-workspace-pill topbar-workspace-pill-doctor">
+              <span className="topbar-workspace-dot" aria-hidden="true" />
+              Modo Médico
+            </span>
             <span className="topbar-date">{formattedDate}</span>
 
             <button

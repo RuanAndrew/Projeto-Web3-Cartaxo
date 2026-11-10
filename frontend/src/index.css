@@ -4380,3 +4380,353 @@ p {
     grid-template-columns: 1fr;
   }
 }
+
+/* =========================================================
+   DIFERENCIAÇÃO VISUAL: MÉDICO (AZUL) vs ADMIN (VERDE ESMERALDA)
+   ========================================================= */
+
+.brand-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.workspace-role-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+}
+
+.workspace-role-tag-doctor {
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(96, 165, 250, 0.35);
+}
+
+.workspace-role-tag-admin {
+  color: #6ee7b7;
+  background: rgba(16, 185, 129, 0.22);
+  border: 1px solid rgba(52, 211, 153, 0.38);
+}
+
+.doctor-topbar {
+  border-top: 3px solid #2563eb;
+}
+
+.topbar-workspace-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 750;
+  letter-spacing: 0.1px;
+}
+
+.topbar-workspace-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.topbar-workspace-pill-doctor {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+
+.topbar-workspace-pill-doctor .topbar-workspace-dot {
+  background: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+}
+
+.topbar-workspace-pill-admin {
+  color: #047857;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+}
+
+.topbar-workspace-pill-admin .topbar-workspace-dot {
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+}
+
+/* Tema exclusivo do Painel Administrativo (Verde Esmeralda / Floresta) */
+.admin-shell {
+  --color-primary: #059669;
+  --color-primary-dark: #047857;
+  --color-primary-soft: #e6f7f1;
+  --color-background: #ecf3f0;
+  --color-border: #cce0d9;
+  background: #ecf3f0;
+}
+
+.admin-shell .doctor-sidebar {
+  background: linear-gradient(180deg, #0b2620 0%, #071915 100%);
+  border-right: 1px solid rgba(52, 211, 153, 0.14);
+}
+
+.admin-shell .brand {
+  border-bottom-color: rgba(52, 211, 153, 0.12);
+}
+
+.admin-shell .brand-symbol {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+}
+
+.admin-shell .brand-copy small {
+  color: #86b9ab;
+}
+
+.admin-shell .sidebar-section-label {
+  color: #5ea190;
+}
+
+.admin-shell .nav-link {
+  color: #b7d9cf;
+}
+
+.admin-shell .nav-link:hover {
+  color: #ffffff;
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.admin-shell .nav-link-active {
+  color: #ffffff;
+  background: linear-gradient(
+    90deg,
+    rgba(16, 185, 129, 0.24) 0%,
+    rgba(16, 185, 129, 0.08) 100%
+  );
+  border-color: rgba(52, 211, 153, 0.32);
+  box-shadow: 0 4px 14px rgba(4, 24, 19, 0.28);
+}
+
+.admin-shell .nav-link-active::before {
+  background: linear-gradient(180deg, #34d399 0%, #059669 100%);
+  box-shadow: 0 0 10px rgba(52, 211, 153, 0.75);
+}
+
+.admin-shell .nav-icon {
+  color: #7ab3a3;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.admin-shell .nav-link:hover .nav-icon {
+  color: #d1fae5;
+  background: rgba(16, 185, 129, 0.16);
+}
+
+.admin-shell .nav-link-active .nav-icon {
+  color: #ffffff;
+  background: #059669;
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.45);
+}
+
+.admin-shell .sidebar-footer-card {
+  background: rgba(16, 185, 129, 0.06);
+  border-color: rgba(52, 211, 153, 0.14);
+}
+
+.admin-shell .profile-avatar,
+.admin-shell .topbar-avatar {
+  color: #065f46;
+  background: #d1fae5;
+  border-color: #a7f3d0;
+}
+
+.admin-shell .profile-copy small {
+  color: #86b9ab;
+}
+
+.admin-shell .doctor-topbar {
+  border-top: 3px solid #059669;
+  border-bottom-color: #cce0d9;
+}
+
+.admin-shell .eyebrow {
+  color: #047857;
+}
+
+.admin-shell .form-input:focus {
+  border-color: #34d399;
+  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.12);
+}
+
+.admin-shell .checkbox-row input {
+  accent-color: #059669;
+}
+
+.admin-shell .chip-option:hover {
+  border-color: #34d399;
+}
+
+.admin-shell .btn-outline {
+  color: #047857;
+  border-color: #a7f3d0;
+}
+
+.admin-shell .btn-outline:not(:disabled):hover {
+  background: #ecfdf5;
+  border-color: #6ee7b7;
+}
+
+.admin-shell .empty-state-icon,
+.admin-shell .schedule-empty-icon {
+  color: #047857;
+  background: #d1fae5;
+  border-color: #a7f3d0;
+}
+
+.admin-shell .patient-avatar.avatar-blue {
+  color: #065f46;
+  background: #d1fae5;
+}
+
+/* Cabeçalhos e painéis verdes no Admin */
+.admin-shell .page-heading,
+.admin-shell .schedule-hero-banner {
+  padding: 24px 28px;
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdf8 100%);
+  border: 1px solid #c6e2d8;
+  border-left: 5px solid #059669;
+  border-radius: 16px;
+  box-shadow: 0 6px 20px rgba(6, 78, 59, 0.05);
+}
+
+.admin-shell .schedule-kpi-pill {
+  background: #f3faf7;
+  border-color: #cde4dc;
+}
+
+.admin-shell .schedule-kpi-pill-highlight {
+  background: #e6f7f1;
+  border-color: #99e2c8;
+}
+
+.admin-shell .schedule-section-step {
+  background: #064e3b;
+}
+
+.admin-shell .card,
+.admin-shell .schedule-panel {
+  border-color: #c5ddd5;
+}
+
+.admin-shell .schedule-panel-header {
+  background: linear-gradient(180deg, #f5fbf9 0%, #eaf5f1 100%);
+  border-bottom-color: #cbe2da;
+}
+
+.admin-shell .schedule-panel-icon-blue,
+.admin-shell .schedule-panel-icon-indigo {
+  color: #047857;
+  background: #d1fae5;
+  border-color: #a7f3d0;
+}
+
+.admin-shell .schedule-step-num {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.admin-shell .day-selector {
+  background: #e3efe9;
+  border-color: #c6ddd4;
+}
+
+.admin-shell .day-pill:hover {
+  border-color: #34d399;
+  color: #065f46;
+}
+
+.admin-shell .day-pill-active {
+  background: #059669;
+  border-color: #047857;
+  color: #ffffff;
+  box-shadow: 0 3px 8px rgba(5, 150, 105, 0.28);
+}
+
+.admin-shell .date-shortcut-chip:hover {
+  border-color: #34d399;
+  color: #065f46;
+  background: #f0fdf8;
+}
+
+.admin-shell .date-shortcut-chip-active {
+  background: #d1fae5;
+  border-color: #34d399;
+  color: #065f46;
+}
+
+.admin-shell .schedule-date-preview,
+.admin-shell .schedule-rule-box {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
+.admin-shell .schedule-date-preview strong {
+  color: #064e3b;
+}
+
+.admin-shell .schedule-rule-box svg {
+  color: #059669;
+}
+
+.admin-shell .week-day-row-filled {
+  background: #f3fbf8;
+  border-color: #a7f3d0;
+  border-left: 4px solid #059669;
+}
+
+.admin-shell .week-day-row-filled .week-day-abbr {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.admin-shell .slot-badge {
+  border-color: #99e2c8;
+  color: #065f46;
+}
+
+.admin-shell .slot-date-chip-specific,
+.admin-shell .availability-time-pill,
+.admin-shell .schedule-badge-active {
+  background: #d1fae5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
+.admin-shell .slot-action-btn {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.admin-shell .slot-action-btn:hover {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.admin-shell .slot-action-remove {
+  background: #fff1f2;
+  color: #e11d48;
+}
+
+.admin-shell .schedule-filter-bar {
+  background: #ebf5f1;
+  border-color: #c8e0d7;
+}
+
+@media (max-width: 640px) {
+  .topbar-workspace-pill {
+    display: none;
+  }
+}

@@ -1,3 +1,4 @@
-fastapi==0.104.1
-uvicorn==0.24.0
-alembic==1.13.0
+﻿fastapi
+uvicorn[standard]
+sqlalchemy[asyncio]
+asyncpg

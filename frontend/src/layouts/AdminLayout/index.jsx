@@ -75,7 +75,7 @@ export default function AdminLayout() {
   }).format(new Date());
 
   return (
-    <div className="doctor-shell">
+    <div className="doctor-shell admin-shell">
       {menuOpen && (
         <button
           type="button"
@@ -94,8 +94,13 @@ export default function AdminLayout() {
           <span className="brand-symbol">C</span>
 
           <span className="brand-copy">
-            <strong>Clínica</strong>
-            <small>Painel administrativo</small>
+            <span className="brand-title-row">
+              <strong>Clínica</strong>
+              <span className="workspace-role-tag workspace-role-tag-admin">
+                Admin
+              </span>
+            </span>
+            <small>Gestão administrativa</small>
           </span>
         </Link>
 
@@ -201,6 +206,10 @@ export default function AdminLayout() {
           </div>
 
           <div className="topbar-right">
+            <span className="topbar-workspace-pill topbar-workspace-pill-admin">
+              <span className="topbar-workspace-dot" aria-hidden="true" />
+              Modo Admin
+            </span>
             <span className="topbar-date">{formattedDate}</span>
             <div className="topbar-avatar">AD</div>
           </div>
