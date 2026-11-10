@@ -8,16 +8,28 @@ import {
   adicionarDisponibilidade,
   atualizarDisponibilidade,
   buscarHorariosDisponiveis,
+  diaSemanaDeData,
+  formatDataBR,
+  formatDataExtenso,
   formatHora,
+  hojeIso,
   listarDisponibilidades,
   listarEspecialidades,
   listarProfissionais,
+  proximaDataParaDiaSemana,
   removerDisponibilidade,
+  somarDiasIso,
 } from "../../services/profissionaisApi.js";
 
 const LABEL_POR_DIA = Object.fromEntries(
   DIAS_SEMANA.map((d) => [d.value, d.label])
 );
+
+const TURNOS_RAPIDOS = [
+  { label: "Manhã (08h–12h)", inicio: "08:00", fim: "12:00" },
+  { label: "Tarde (13h–17h)", inicio: "13:00", fim: "17:00" },
+  { label: "Integral (08h–18h)", inicio: "08:00", fim: "18:00" },
+];
 
 export default function AgendaConfigAdmin() {
   const { showToast } = useToast();
@@ -33,9 +45,13 @@ export default function AgendaConfigAdmin() {
   const [disponibilidades, setDisponibilidades] = useState([]);
   const [loadingAgenda, setLoadingAgenda] = useState(false);
 
-  // Formulário de horário
+  // Formulário de horário e data de atendimento
+  const dataInicial = useMemo(() => hojeIso(), []);
   const [editandoSlotId, setEditandoSlotId] = useState(null);
-  const [diaSemana, setDiaSemana] = useState("SEGUNDA");
+  const [dataAtendimento, setDataAtendimento] = useState(dataInicial);
+  const [diaSemana, setDiaSemana] = useState(() =>
+    diaSemanaDeData(dataInicial)
+  );
   const [horarioInicio, setHorarioInicio] = useState("08:00");
   const [horarioFim, setHorarioFim] = useState("12:00");
   const [submitting, setSubmitting] = useState(false);
@@ -45,6 +61,7 @@ export default function AgendaConfigAdmin() {
   const [buscaProfissionalId, setBuscaProfissionalId] = useState("");
   const [buscaEspecialidadeId, setBuscaEspecialidadeId] = useState("");
   const [buscaDia, setBuscaDia] = useState("");
+  const [buscaData, setBuscaData] = useState("");
   const [resultadosBusca, setResultadosBusca] = useState([]);
   const [loadingBusca, setLoadingBusca] = useState(false);
 
@@ -83,6 +100,7 @@ export default function AgendaConfigAdmin() {
         profissional_id: buscaProfissionalId || undefined,
         especialidade_id: buscaEspecialidadeId || undefined,
         dia_semana: buscaDia || undefined,
+        data_atendimento: buscaData || undefined,
       });
       setResultadosBusca(res);
     } catch (err) {
@@ -90,7 +108,13 @@ export default function AgendaConfigAdmin() {
     } finally {
       setLoadingBusca(false);
     }
-  }, [buscaProfissionalId, buscaEspecialidadeId, buscaDia, showToast]);
+  }, [
+    buscaProfissionalId,
+    buscaEspecialidadeId,
+    buscaDia,
+    buscaData,
+    showToast,
+  ]);
 
   useEffect(() => {
     carregarAgenda(profissionalId);
@@ -121,16 +145,34 @@ export default function AgendaConfigAdmin() {
     cancelarEdicaoSlot();
   }
 
+  function handleChangeDataAtendimento(novaData) {
+    setDataAtendimento(novaData);
+    if (novaData) {
+      setDiaSemana(diaSemanaDeData(novaData));
+    }
+  }
+
+  function handleSelectDiaSemana(novoDia) {
+    setDiaSemana(novoDia);
+    if (dataAtendimento) {
+      setDataAtendimento(proximaDataParaDiaSemana(novoDia, hojeIso()));
+    }
+  }
+
   function iniciarEdicaoSlot(slot) {
     setEditandoSlotId(slot.id);
     setDiaSemana(slot.dia_semana);
+    setDataAtendimento(slot.data_atendimento || "");
     setHorarioInicio(formatHora(slot.horario_inicio));
     setHorarioFim(formatHora(slot.horario_fim));
     setError("");
   }
 
   function cancelarEdicaoSlot() {
+    const hoje = hojeIso();
     setEditandoSlotId(null);
+    setDataAtendimento(hoje);
+    setDiaSemana(diaSemanaDeData(hoje));
     setHorarioInicio("08:00");
     setHorarioFim("12:00");
     setError("");
@@ -150,8 +192,13 @@ export default function AgendaConfigAdmin() {
       return;
     }
 
+    const diaFinal = dataAtendimento
+      ? diaSemanaDeData(dataAtendimento)
+      : diaSemana;
+
     const payload = {
-      dia_semana: diaSemana,
+      dia_semana: diaFinal,
+      data_atendimento: dataAtendimento || null,
       horario_inicio: horarioInicio,
       horario_fim: horarioFim,
     };
@@ -193,13 +240,14 @@ export default function AgendaConfigAdmin() {
   );
 
   const temFiltroBusca = Boolean(
-    buscaEspecialidadeId || buscaProfissionalId || buscaDia
+    buscaEspecialidadeId || buscaProfissionalId || buscaDia || buscaData
   );
 
   function limparFiltrosBusca() {
     setBuscaEspecialidadeId("");
     setBuscaProfissionalId("");
     setBuscaDia("");
+    setBuscaData("");
   }
 
   return (
@@ -309,35 +357,161 @@ export default function AgendaConfigAdmin() {
               </div>
 
               <div className="schedule-field-group">
-                <div className="schedule-field-head">
-                  <span className="schedule-step-num">2</span>
-                  <span className="form-label">Dia da semana</span>
-                </div>
-                <div
-                  className="day-selector"
-                  role="group"
-                  aria-label="Dia da semana"
-                >
-                  {DIAS_SEMANA.map((dia) => (
-                    <button
-                      key={dia.value}
-                      type="button"
-                      aria-pressed={diaSemana === dia.value}
-                      onClick={() => setDiaSemana(dia.value)}
-                      className={`day-pill ${
-                        diaSemana === dia.value ? "day-pill-active" : ""
-                      }`}
+                <div className="schedule-field-head schedule-field-head-between">
+                  <div className="schedule-field-head-left">
+                    <span className="schedule-step-num">2</span>
+                    <label
+                      className="form-label"
+                      htmlFor="agenda-data-atendimento"
                     >
-                      {dia.short}
+                      Data do atendimento
+                    </label>
+                  </div>
+
+                  <div
+                    className="schedule-date-shortcuts"
+                    role="group"
+                    aria-label="Atalhos de data"
+                  >
+                    <button
+                      type="button"
+                      className={`date-shortcut-chip ${
+                        dataAtendimento === hojeIso()
+                          ? "date-shortcut-chip-active"
+                          : ""
+                      }`}
+                      onClick={() => handleChangeDataAtendimento(hojeIso())}
+                    >
+                      Hoje
                     </button>
-                  ))}
+                    <button
+                      type="button"
+                      className={`date-shortcut-chip ${
+                        dataAtendimento === somarDiasIso(hojeIso(), 1)
+                          ? "date-shortcut-chip-active"
+                          : ""
+                      }`}
+                      onClick={() =>
+                        handleChangeDataAtendimento(somarDiasIso(hojeIso(), 1))
+                      }
+                    >
+                      Amanhã
+                    </button>
+                    <button
+                      type="button"
+                      className={`date-shortcut-chip ${
+                        dataAtendimento === somarDiasIso(hojeIso(), 7)
+                          ? "date-shortcut-chip-active"
+                          : ""
+                      }`}
+                      onClick={() =>
+                        handleChangeDataAtendimento(somarDiasIso(hojeIso(), 7))
+                      }
+                    >
+                      +7 dias
+                    </button>
+                    <button
+                      type="button"
+                      className={`date-shortcut-chip ${
+                        !dataAtendimento ? "date-shortcut-chip-active" : ""
+                      }`}
+                      onClick={() => handleChangeDataAtendimento("")}
+                    >
+                      Fixo semanal
+                    </button>
+                  </div>
+                </div>
+
+                <div className="schedule-date-picker-wrap">
+                  <input
+                    id="agenda-data-atendimento"
+                    type="date"
+                    className="form-input schedule-date-input"
+                    value={dataAtendimento}
+                    onChange={(e) =>
+                      handleChangeDataAtendimento(e.target.value)
+                    }
+                  />
+
+                  <div className="schedule-date-preview">
+                    <span className="schedule-date-preview-icon" aria-hidden="true">
+                      {dataAtendimento ? "📅" : "↻"}
+                    </span>
+                    <span>
+                      {dataAtendimento ? (
+                        <>
+                          Atendimento em{" "}
+                          <strong>{formatDataExtenso(dataAtendimento)}</strong>
+                        </>
+                      ) : (
+                        <>
+                          Expediente recorrente toda{" "}
+                          <strong>{LABEL_POR_DIA[diaSemana]}</strong>
+                        </>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="schedule-weekday-subblock">
+                  <span className="time-sublabel">
+                    Dia da semana correspondente
+                  </span>
+                  <div
+                    className="day-selector"
+                    role="group"
+                    aria-label="Dia da semana"
+                  >
+                    {DIAS_SEMANA.map((dia) => (
+                      <button
+                        key={dia.value}
+                        type="button"
+                        aria-pressed={diaSemana === dia.value}
+                        onClick={() => handleSelectDiaSemana(dia.value)}
+                        className={`day-pill ${
+                          diaSemana === dia.value ? "day-pill-active" : ""
+                        }`}
+                      >
+                        {dia.short}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
               <div className="schedule-field-group">
-                <div className="schedule-field-head">
-                  <span className="schedule-step-num">3</span>
-                  <span className="form-label">Faixa de horário</span>
+                <div className="schedule-field-head schedule-field-head-between">
+                  <div className="schedule-field-head-left">
+                    <span className="schedule-step-num">3</span>
+                    <span className="form-label">Faixa de horário</span>
+                  </div>
+
+                  <div
+                    className="schedule-date-shortcuts"
+                    role="group"
+                    aria-label="Turnos rápidos"
+                  >
+                    {TURNOS_RAPIDOS.map((turno) => {
+                      const ativo =
+                        horarioInicio === turno.inicio &&
+                        horarioFim === turno.fim;
+                      return (
+                        <button
+                          key={turno.label}
+                          type="button"
+                          className={`date-shortcut-chip ${
+                            ativo ? "date-shortcut-chip-active" : ""
+                          }`}
+                          onClick={() => {
+                            setHorarioInicio(turno.inicio);
+                            setHorarioFim(turno.fim);
+                          }}
+                        >
+                          {turno.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div className="time-row">
@@ -538,6 +712,17 @@ export default function AgendaConfigAdmin() {
                         ) : (
                           slots.map((slot) => (
                             <div className="slot-badge" key={slot.id}>
+                              <span
+                                className={`slot-date-chip ${
+                                  slot.data_atendimento
+                                    ? "slot-date-chip-specific"
+                                    : "slot-date-chip-recurring"
+                                }`}
+                              >
+                                {slot.data_atendimento
+                                  ? `📅 ${formatDataBR(slot.data_atendimento)}`
+                                  : "↻ Semanal"}
+                              </span>
                               <strong>
                                 {formatHora(slot.horario_inicio)} –{" "}
                                 {formatHora(slot.horario_fim)}
@@ -604,7 +789,7 @@ export default function AgendaConfigAdmin() {
               </h2>
               <p className="card-description">
                 Pesquisa os horários de atendimento dos profissionais ativos
-                filtrando por profissional, especialidade ou dia da semana.
+                filtrando por data, profissional, especialidade ou dia da semana.
               </p>
             </div>
           </div>
@@ -615,7 +800,7 @@ export default function AgendaConfigAdmin() {
         </header>
 
         <div className="schedule-panel-body">
-          <div className="schedule-filter-bar">
+          <div className="schedule-filter-bar schedule-filter-bar-4cols">
             <div className="schedule-filter-field">
               <label
                 className="schedule-filter-label"
@@ -662,6 +847,23 @@ export default function AgendaConfigAdmin() {
                     </option>
                   ))}
               </select>
+            </div>
+
+            <div className="schedule-filter-field">
+              <label
+                className="schedule-filter-label"
+                htmlFor="filtro-data-uc08"
+              >
+                Data do atendimento
+              </label>
+              <input
+                id="filtro-data-uc08"
+                type="date"
+                className="form-input admin-select"
+                aria-label="Filtrar busca por data do atendimento"
+                value={buscaData}
+                onChange={(e) => setBuscaData(e.target.value)}
+              />
             </div>
 
             <div className="schedule-filter-field">
@@ -750,7 +952,20 @@ export default function AgendaConfigAdmin() {
                         {formatHora(item.horario_fim)}
                       </span>
                     </div>
-                    <span>{LABEL_POR_DIA[item.dia_semana]}</span>
+                    <div className="availability-meta-line">
+                      <span>{LABEL_POR_DIA[item.dia_semana]}</span>
+                      <span
+                        className={`slot-date-chip ${
+                          item.data_atendimento
+                            ? "slot-date-chip-specific"
+                            : "slot-date-chip-recurring"
+                        }`}
+                      >
+                        {item.data_atendimento
+                          ? `📅 ${formatDataBR(item.data_atendimento)}`
+                          : "↻ Semanal"}
+                      </span>
+                    </div>
                     {item.especialidades.length > 0 && (
                       <div className="tag-list">
                         {item.especialidades.map((esp) => (

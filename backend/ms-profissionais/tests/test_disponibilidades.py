@@ -37,9 +37,26 @@ def test_cadastro_valido_serve_de_referencia(client, url, profissional):
         "id": 0,
         "profissional_id": profissional["id"],
         "dia_semana": "SEGUNDA",
+        "data_atendimento": None,
         "horario_inicio": "08:00:00",
         "horario_fim": "12:00:00",
     }
+
+
+def test_cadastro_com_data_atendimento_define_dia_da_semana(client, url, profissional):
+    resp = client.post(
+        url,
+        json={
+            "data_atendimento": "2026-11-09",
+            "horario_inicio": "08:00",
+            "horario_fim": "12:00",
+        },
+    )
+
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["dia_semana"] == "SEGUNDA"
+    assert body["data_atendimento"] == "2026-11-09"
 
 
 class TestDadosInvalidos:

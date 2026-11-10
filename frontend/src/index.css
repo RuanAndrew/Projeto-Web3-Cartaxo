@@ -4253,12 +4253,130 @@ p {
   font-weight: 700;
 }
 
+.schedule-filter-bar-4cols {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.schedule-field-head-between {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.schedule-field-head-left {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.schedule-date-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.date-shortcut-chip {
+  padding: 4px 9px;
+  border-radius: 7px;
+  border: 1px solid #d5dfef;
+  background: #ffffff;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.date-shortcut-chip:hover {
+  border-color: #93b4f8;
+  color: #1e40af;
+  background: #f5f8ff;
+}
+
+.date-shortcut-chip-active {
+  background: #dbe7ff;
+  border-color: #7ea6f8;
+  color: #1e40af;
+}
+
+.schedule-date-picker-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.schedule-date-input {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.schedule-date-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  background: #edf3ff;
+  border: 1px solid #cddcfb;
+  border-radius: 9px;
+  color: #2c4379;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.schedule-date-preview strong {
+  color: #1e3a8a;
+  text-transform: capitalize;
+}
+
+.schedule-date-preview-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.schedule-weekday-subblock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px dashed #dce4f1;
+}
+
+.slot-date-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.slot-date-chip-specific {
+  background: #eef4ff;
+  border: 1px solid #c7d9fe;
+  color: #1e40af;
+}
+
+.slot-date-chip-recurring {
+  background: #f1f5f9;
+  border: 1px solid #d8e1ec;
+  color: #475569;
+}
+
+.availability-meta-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
 @media (max-width: 1150px) {
   .admin-grid {
     grid-template-columns: 1fr;
   }
 
-  .schedule-filter-bar {
+  .schedule-filter-bar,
+  .schedule-filter-bar-4cols {
     grid-template-columns: 1fr;
   }
 }
