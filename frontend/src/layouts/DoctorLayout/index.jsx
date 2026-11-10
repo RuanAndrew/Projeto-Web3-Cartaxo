@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { sair } from "../../services/autenticacao.js";
 import { useToast } from "../../components/ToastProvider.jsx";
 
 const navigation = [
@@ -146,9 +147,9 @@ export default function DoctorLayout() {
           </div>
         </div>
 
-        <Link className="sidebar-logout" to="/">
+        <Link className="sidebar-logout" to="/" onClick={() => { sair(); }}>
           <span aria-hidden="true">↪</span>
-          Sair da demonstração
+          Encerrar sessão
         </Link>
       </aside>
 

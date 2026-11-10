@@ -2,16 +2,19 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import Btn from "../components/Btn.jsx";
+import { ApiError } from "../utils/api.js";
+import { rotaPorPerfil } from "../utils/auth.js";
+import { entrar } from "../services/autenticacao.js";
 
 export default function Login() {
-  const [role, setRole] = useState("doctor");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [carregando, setCarregando] = useState(false);
 
   const navigate = useNavigate();
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
     setError("");
 
@@ -20,14 +23,19 @@ export default function Login() {
       return;
     }
 
-    // Demonstração: não valida credenciais nem cria uma sessão.
-    navigate(
-      role === "patient"
-        ? "/portal"
-        : role === "admin"
-          ? "/admin/profissionais"
-          : "/agenda"
-    );
+    setCarregando(true);
+    try {
+      const sessao = await entrar(email, password);
+      navigate(rotaPorPerfil(sessao.usuario?.perfil));
+    } catch (erro) {
+      setError(
+        erro instanceof ApiError
+          ? erro.message
+          : "Falha inesperada no login. Tente novamente."
+      );
+    } finally {
+      setCarregando(false);
+    }
   }
 
   return (
@@ -89,62 +97,11 @@ export default function Login() {
           <h2 className="login-heading">Acesse sua conta</h2>
 
           <p className="login-subtitle">
-            Escolha seu perfil e informe seus dados para visualizar
-            a demonstração.
+            Informe suas credenciais: o sistema identifica o seu perfil e
+            direciona você para a área correspondente.
           </p>
 
           <form className="login-form" onSubmit={handleSubmit}>
-            <fieldset className="role-fieldset">
-              <legend>Como deseja acessar?</legend>
-
-              <div className="role-selector">
-                <button
-                  type="button"
-                  className={`role-option ${
-                    role === "doctor" ? "role-option-active" : ""
-                  }`}
-                  onClick={() => setRole("doctor")}
-                  aria-pressed={role === "doctor"}
-                >
-                  <span className="role-icon">✚</span>
-                  <span>
-                    <strong>Profissional</strong>
-                    <small>Agenda e prontuários</small>
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  className={`role-option ${
-                    role === "patient" ? "role-option-active" : ""
-                  }`}
-                  onClick={() => setRole("patient")}
-                  aria-pressed={role === "patient"}
-                >
-                  <span className="role-icon">♡</span>
-                  <span>
-                    <strong>Paciente</strong>
-                    <small>Tratamento e exercícios</small>
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  className={`role-option ${
-                    role === "admin" ? "role-option-active" : ""
-                  }`}
-                  onClick={() => setRole("admin")}
-                  aria-pressed={role === "admin"}
-                >
-                  <span className="role-icon">⚙</span>
-                  <span>
-                    <strong>Administrador</strong>
-                    <small>Profissionais e agendas</small>
-                  </span>
-                </button>
-              </div>
-            </fieldset>
-
             <label className="form-label" htmlFor="email">
               E-mail
             </label>
@@ -154,7 +111,7 @@ export default function Login() {
               className="form-input"
               type="email"
               autoComplete="username"
-              placeholder="voce@exemplo.com"
+              placeholder="voce@clinica.dev"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               required
@@ -181,22 +138,26 @@ export default function Login() {
               </p>
             )}
 
-            <Btn type="submit" className="login-submit">
-              Entrar na plataforma <span aria-hidden="true">→</span>
+            <Btn type="submit" className="login-submit" disabled={carregando}>
+              {carregando
+                ? "Entrando…"
+                : "Entrar na plataforma"}{" "}
+              <span aria-hidden="true">→</span>
             </Btn>
           </form>
 
           <div className="demo-notice">
             <span aria-hidden="true">ⓘ</span>
             <p>
-              <strong>Modo de demonstração.</strong> Qualquer e-mail e
-              senha preenchidos permitem acessar as telas fictícias.
-              Nenhuma autenticação real é realizada.
+              <strong>Contas de demonstração</strong> criadas pelo
+              auth-service — administrador:{" "}
+              <code>admin@clinica.dev</code> / <code>admin123</code>. Outros
+              usuários precisam ser cadastrados por um administrador.
             </p>
           </div>
 
           <p className="login-legal">
-            Ambiente de prototipação · Dados fictícios
+            Ambiente acadêmico · Dados fictícios
           </p>
         </div>
       </section>

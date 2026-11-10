@@ -7,6 +7,7 @@ mantendo o caminho original. Ex.: `GET :8000/documentos/paciente/1` -> `document
 | Prefixo | Destino |
 |---|---|
 | `/health` | resposta do próprio gateway (público) |
+| `/auth/**` | `AUTH_SERVICE_URL` — `POST /auth/login` e `POST /auth/refresh` são públicos; as demais exigem JWT |
 | `/documentos/**` | `DOCUMENTOS_SERVICE_URL` |
 
 Para expor outro serviço: adicione `<nome>_service_url` em `src/core/config.py`
