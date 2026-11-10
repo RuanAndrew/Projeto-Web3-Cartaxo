@@ -9,8 +9,18 @@ branch_labels = None
 depends_on = None
 
 def upgrade():
-    sexo = sa.Enum("MASCULINO", "FEMININO", "OUTRO", "NAO_INFORMAR", name="sexo_paciente")
-    sexo.create(op.get_bind(), checkfirst=True)
+    sexo = postgresql.ENUM("MASCULINO", "FEMININO", "OUTRO", "NAO_INFORMAR", name="sexo_paciente", create_type=False)
+
+# Cria o tipo manualmente no banco apenas se não existir
+    op.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'sexo_paciente') THEN
+                CREATE TYPE sexo_paciente AS ENUM ('MASCULINO', 'FEMININO', 'OUTRO', 'NAO_INFORMAR');
+            END IF;
+        END$$;
+    """)
+
     op.create_table("pacientes",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("user_account_id", postgresql.UUID(as_uuid=True), nullable=True),
@@ -34,4 +44,4 @@ def upgrade():
 
 def downgrade():
     op.drop_table("pacientes")
-    sa.Enum(name="sexo_paciente").drop(op.get_bind(), checkfirst=True)
+    op.execute("DROP TYPE IF EXISTS sexo_paciente;")
