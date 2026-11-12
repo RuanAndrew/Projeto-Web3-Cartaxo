@@ -34,7 +34,7 @@ export default function PatientLayout() {
               Minhas receitas
             </NavLink>
 
-            <Link to="/" className="patient-logout">
+            <Link to="/" className="patient-logout" onClick={() => { sair(); }}>
               Sair <span aria-hidden="true">↗</span>
             </Link>
           </nav>

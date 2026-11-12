@@ -9,7 +9,7 @@ export class ApiError extends Error {
   }
 }
 
-function mensagemPorStatus(status, detalhe) {
+export function mensagemPorStatus(status, detalhe) {
   if (status === 401) return "Sua sessão expirou ou é inválida. Entre novamente.";
   if (status === 403) return "Você não tem permissão para acessar este recurso.";
   if (status === 404) return "Recurso não encontrado.";

@@ -9,27 +9,35 @@ bearer = HTTPBearer()
 
 
 class Usuario(BaseModel):
-    id: int
+    id: str
     papel: str  # "profissional" | "paciente" | "admin"
 
 
 def get_current_user(
     credenciais: HTTPAuthorizationCredentials = Depends(bearer),
 ) -> Usuario:
-    """Valida o JWT localmente até o auth-service existir.
-    Claims esperadas: sub (id do usuário) e role (papel)."""
+    """Valida o JWT localmente usando o segredo compartilhado do sistema."""
     try:
         payload = jwt.decode(
             credenciais.credentials,
             settings.jwt_secret_key,
             algorithms=[settings.jwt_algorithm],
         )
-        return Usuario(id=int(payload["sub"]), papel=payload.get("role", "paciente"))
-    except (JWTError, KeyError, ValueError):
+    except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token inválido ou expirado.",
         )
+
+    papel = str(payload.get("perfil") or payload.get("role", "paciente")).lower()
+
+    sub = str(payload.get("sub", ""))
+    try:
+        id_usuario = int(sub)
+    except ValueError:
+        id_usuario = sub
+
+    return Usuario(id=str(id_usuario), papel=papel)
 
 
 def exigir_profissional(usuario: Usuario = Depends(get_current_user)) -> Usuario:

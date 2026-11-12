@@ -61,10 +61,6 @@ export default function App() {
             <Route path="/portal/receitas" element={<Receitas />} />
           </Route>
 
-          <Route element={<PatientLayout />}>
-            <Route path="/portal" element={<Portal />} />
-          </Route>
-
           <Route
             path="*"
             element={<Navigate to="/" replace />}

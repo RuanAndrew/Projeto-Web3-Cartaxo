@@ -2,7 +2,12 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import Btn from "../components/Btn.jsx";
+import { ApiError } from "../utils/api.js";
+import { rotaPorPerfil } from "../utils/auth.js";
+import { entrar, sair } from "../services/autenticacao.js";
 
+// A aba escolhida (Médico | Paciente | Admin) é só uma orientação visual.
+// Quem decide o perfil, a área e as permissões é o servidor (claim "perfil" do token).
 const ROLE_OPTIONS = [
   {
     id: "doctor",
@@ -10,7 +15,6 @@ const ROLE_OPTIONS = [
     title: "Área Médica",
     description: "Agenda clínica, atendimentos e prontuários eletrônicos.",
     placeholder: "medico@clinica.com.br",
-    route: "/agenda",
     icon: (
       <svg
         viewBox="0 0 24 24"
@@ -33,7 +37,6 @@ const ROLE_OPTIONS = [
     title: "Portal do Paciente",
     description: "Acompanhamento do tratamento, exercícios diários e receitas.",
     placeholder: "paciente@exemplo.com",
-    route: "/portal",
     icon: (
       <svg
         viewBox="0 0 24 24"
@@ -54,7 +57,6 @@ const ROLE_OPTIONS = [
     title: "Painel Administrativo",
     description: "Gestão de profissionais, especialidades e configuração de agendas.",
     placeholder: "admin@clinica.com.br",
-    route: "/admin/profissionais",
     icon: (
       <svg
         viewBox="0 0 24 24"
@@ -72,18 +74,27 @@ const ROLE_OPTIONS = [
   },
 ];
 
+// Perfil devolvido pelo auth-service -> aba correspondente.
+const ROLE_POR_PERFIL = {
+  ADMIN: "admin",
+  PROFISSIONAL: "doctor",
+  ATENDENTE: "doctor",
+  PACIENTE: "patient",
+};
+
 export default function Login() {
   const [role, setRole] = useState("doctor");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [carregando, setCarregando] = useState(false);
 
   const navigate = useNavigate();
 
   const activeRole =
     ROLE_OPTIONS.find((option) => option.id === role) || ROLE_OPTIONS[0];
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
     setError("");
 
@@ -92,8 +103,31 @@ export default function Login() {
       return;
     }
 
-    // Demonstração: não valida credenciais nem cria uma sessão.
-    navigate(activeRole.route);
+    setCarregando(true);
+    try {
+      const sessao = await entrar(email, password);
+      const perfil = sessao.usuario?.perfil;
+
+      // A aba escolhida precisa corresponder ao perfil real da conta.
+      if (ROLE_POR_PERFIL[perfil] !== role) {
+        await sair();
+        setError(
+          `Esta conta é do perfil "${perfil ? perfil.toLowerCase() : "desconhecido"}". ` +
+            "Selecione a aba correspondente e tente novamente."
+        );
+        return;
+      }
+
+      navigate(rotaPorPerfil(perfil));
+    } catch (erro) {
+      setError(
+        erro instanceof ApiError
+          ? erro.message
+          : "Falha inesperada no login. Tente novamente."
+      );
+    } finally {
+      setCarregando(false);
+    }
   }
 
   return (
@@ -155,7 +189,7 @@ export default function Login() {
           <h2 className="login-heading">Acesse sua conta</h2>
 
           <p className="login-subtitle">
-            Escolha seu perfil de acesso e informe seus dados para
+            Escolha seu perfil de acesso e informe suas credenciais para
             entrar na plataforma.
           </p>
 
@@ -236,23 +270,29 @@ export default function Login() {
               </p>
             )}
 
-            <Btn type="submit" className="login-submit">
-              <span>Entrar como {activeRole.label}</span>
+            <Btn type="submit" className="login-submit" disabled={carregando}>
+              <span>
+                {carregando ? "Entrando…" : `Entrar como ${activeRole.label}`}
+              </span>
               <span aria-hidden="true">→</span>
             </Btn>
           </form>
 
-          <div className="demo-notice">
-            <span aria-hidden="true">ⓘ</span>
-            <p>
-              <strong>Modo de demonstração.</strong> Qualquer e-mail e
-              senha preenchidos permitem acessar as telas fictícias.
-              Nenhuma autenticação real é realizada.
-            </p>
-          </div>
+          {/* Credenciais de desenvolvimento: só aparecem no `npm run dev`. */}
+          {import.meta.env.DEV && (
+            <div className="demo-notice">
+              <span aria-hidden="true">ⓘ</span>
+              <p>
+                <strong>Contas de demonstração</strong> criadas pelo
+                auth-service — administrador:{" "}
+                <code>admin@clinica.dev</code> / <code>admin123</code>. Outros
+                usuários precisam ser cadastrados por um administrador.
+              </p>
+            </div>
+          )}
 
           <p className="login-legal">
-            Ambiente de prototipação · Dados fictícios
+            Ambiente acadêmico · Dados fictícios
           </p>
         </div>
       </section>
