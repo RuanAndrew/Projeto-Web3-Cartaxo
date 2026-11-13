@@ -12,9 +12,15 @@ from src.infrastructure.database import Base, engine, get_db
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Cria as tabelas na inicialização. Quando o schema começar a evoluir,
-    # substituir por migrações com Alembic.
+    # Cria as tabelas na inicialização e aplica migração incremental da coluna data_atendimento.
     Base.metadata.create_all(bind=engine)
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE disponibilidades "
+                "ADD COLUMN IF NOT EXISTS data_atendimento DATE"
+            )
+        )
     yield
 
 

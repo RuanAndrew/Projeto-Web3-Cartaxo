@@ -1,11 +1,13 @@
 from collections.abc import Iterable
+from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from src.api.common import get_or_404
 from src.api.schemas import (
+    DIAS_POR_WEEKDAY,
     DisponibilidadeBase,
     DisponibilidadeCreate,
     DisponibilidadeRead,
@@ -21,15 +23,19 @@ ORDEM_DIAS = {dia: i for i, dia in enumerate(DiaSemana)}
 
 
 def _chave_ordenacao(d: Disponibilidade) -> tuple:
-    return (ORDEM_DIAS[d.dia_semana], d.horario_inicio)
+    return (ORDEM_DIAS[d.dia_semana], d.data_atendimento or date.min, d.horario_inicio)
 
 
 def _sobrepoe(a: DisponibilidadeBase | Disponibilidade, b: DisponibilidadeBase | Disponibilidade) -> bool:
-    return (
-        a.dia_semana == b.dia_semana
-        and a.horario_inicio < b.horario_fim
-        and b.horario_inicio < a.horario_fim
-    )
+    if a.dia_semana != b.dia_semana:
+        return False
+    if (
+        a.data_atendimento is not None
+        and b.data_atendimento is not None
+        and a.data_atendimento != b.data_atendimento
+    ):
+        return False
+    return a.horario_inicio < b.horario_fim and b.horario_inicio < a.horario_fim
 
 
 def _validar_sem_conflito(novo: DisponibilidadeBase, existentes: Iterable[Disponibilidade]) -> None:
@@ -103,11 +109,12 @@ def buscar_horarios(
     profissional_id: int | None = None,
     especialidade_id: int | None = None,
     dia_semana: DiaSemana | None = None,
+    data_atendimento: date | None = None,
     db: Session = Depends(get_db),
 ):
     """
     Lista os horários de atendimento de profissionais **ativos**, filtrando por
-    profissional, especialidade e/ou dia da semana.
+    profissional, especialidade, dia da semana e/ou data de atendimento.
     """
     stmt = (
         select(Disponibilidade)
@@ -123,6 +130,15 @@ def buscar_horarios(
         stmt = stmt.where(Profissional.especialidades.any(Especialidade.id == especialidade_id))
     if dia_semana is not None:
         stmt = stmt.where(Disponibilidade.dia_semana == dia_semana)
+    if data_atendimento is not None:
+        dia_da_data = DIAS_POR_WEEKDAY[data_atendimento.weekday()]
+        stmt = stmt.where(
+            or_(
+                Disponibilidade.data_atendimento == data_atendimento,
+                (Disponibilidade.data_atendimento.is_(None))
+                & (Disponibilidade.dia_semana == dia_da_data),
+            )
+        )
 
     resultados = sorted(
         db.scalars(stmt).all(),
@@ -135,6 +151,7 @@ def buscar_horarios(
             profissional_nome=d.profissional.nome,
             especialidades=d.profissional.especialidades,
             dia_semana=d.dia_semana,
+            data_atendimento=d.data_atendimento,
             horario_inicio=d.horario_inicio,
             horario_fim=d.horario_fim,
         )

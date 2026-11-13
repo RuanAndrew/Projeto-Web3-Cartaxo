@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
 
     # Um serviço por linha: para expor um novo, adicione a URL aqui e a rota em routers/proxy.py.
+    auth_service_url: str = "http://auth-service:8000"
     documentos_service_url: str = "http://documentos-service:8000"
     agendamento_service_url: str = "http://agendamento-service:8000"
 

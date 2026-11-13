@@ -1,10 +1,7 @@
 import enum
 from datetime import datetime
-
-from sqlalchemy import BigInteger, Column, DateTime, Enum, Integer, String, Text
-
+from sqlalchemy import BigInteger, Column, DateTime, Enum, Integer, String, Text, Uuid
 from src.infrastructure.database import Base
-
 
 class TipoDocumento(str, enum.Enum):
     receita = "receita"
@@ -22,13 +19,12 @@ class Documento(Base):
     __tablename__ = "documentos"
 
     id = Column(Integer, primary_key=True, index=True)
-    paciente_id = Column(Integer, nullable=False, index=True)
-    profissional_id = Column(Integer, nullable=False, index=True)
+    paciente_id = Column(Uuid(as_uuid=True), nullable=False, index=True)
+    profissional_id = Column(Uuid(as_uuid=True), nullable=False, index=True)
     atendimento_id = Column(Integer, nullable=True, index=True)
 
     tipo = Column(Enum(TipoDocumento), nullable=False)
-    status = Column(Enum(StatusDocumento), nullable=False,
-                    default=StatusDocumento.pendente_liberacao)
+    status = Column(Enum(StatusDocumento), nullable=False, default=StatusDocumento.pendente_liberacao)
     titulo = Column(String(150), nullable=False)
     descricao = Column(Text, nullable=True)
 
@@ -39,6 +35,5 @@ class Documento(Base):
 
     criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)
     liberado_em = Column(DateTime, nullable=True)
-    # Prontuário não pode ser apagado fisicamente: apenas marcado como excluído.
     excluido_em = Column(DateTime, nullable=True)
-    excluido_por = Column(Integer, nullable=True)
+    excluido_por = Column(Uuid(as_uuid=True), nullable=True)

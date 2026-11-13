@@ -1,9 +1,11 @@
-from datetime import time
+from datetime import date, time
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from src.domain.models import DiaSemana
+
+DIAS_POR_WEEKDAY = list(DiaSemana)
 
 Nome = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=150)]
 NomeEspecialidade = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
@@ -34,12 +36,17 @@ class EspecialidadeRead(ORMModel):
 # Disponibilidades (UC07)
 # --------------------------------------------------------------------------- #
 class DisponibilidadeBase(BaseModel):
-    dia_semana: DiaSemana
+    dia_semana: DiaSemana | None = None
+    data_atendimento: date | None = None
     horario_inicio: time
     horario_fim: time
 
     @model_validator(mode="after")
     def validar_intervalo(self):
+        if self.data_atendimento is not None:
+            self.dia_semana = DIAS_POR_WEEKDAY[self.data_atendimento.weekday()]
+        if self.dia_semana is None:
+            raise ValueError("dia_semana ou data_atendimento é obrigatório")
         if self.horario_fim <= self.horario_inicio:
             raise ValueError("horario_fim deve ser posterior a horario_inicio")
         return self
@@ -57,6 +64,7 @@ class DisponibilidadeRead(ORMModel):
     id: int
     profissional_id: int
     dia_semana: DiaSemana
+    data_atendimento: date | None = None
     horario_inicio: time
     horario_fim: time
 
@@ -112,6 +120,7 @@ class HorarioDisponivel(BaseModel):
     profissional_nome: str
     especialidades: list[EspecialidadeRead]
     dia_semana: DiaSemana
+    data_atendimento: date | None = None
     horario_inicio: time
     horario_fim: time
 

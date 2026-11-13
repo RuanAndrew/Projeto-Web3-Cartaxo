@@ -6,6 +6,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
+from uuid import UUID
 
 from src.core.config import settings
 from src.core.security import Usuario, exigir_profissional, get_current_user
@@ -45,7 +46,7 @@ def _checar_acesso(doc: Documento, usuario: Usuario) -> None:
 @router.post("", response_model=schemas.DocumentoResponse,
              status_code=status.HTTP_201_CREATED)
 def criar_documento(
-    paciente_id: int = Form(...),
+    paciente_id: UUID = Form(...),
     tipo: TipoDocumento = Form(...),
     titulo: str = Form(..., max_length=150),
     descricao: Optional[str] = Form(None),
@@ -105,7 +106,7 @@ def criar_documento(
 
 @router.get("/paciente/{paciente_id}", response_model=List[schemas.DocumentoResponse])
 def listar_documentos_paciente(
-    paciente_id: int,
+    paciente_id: UUID,
     tipo: Optional[TipoDocumento] = None,
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_user),

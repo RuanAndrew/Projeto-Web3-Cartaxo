@@ -188,6 +188,8 @@ services:
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-clinica}:${RABBITMQ_PASSWORD:-clinica123}@rabbitmq:5672/
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-changeme-super-secret}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@clinica.dev}
+      ADMIN_SENHA: ${ADMIN_SENHA:-admin123}
     depends_on:
       auth-db: {condition: service_healthy}
       redis: {condition: service_healthy}

@@ -1,10 +1,11 @@
 import enum
-from datetime import time
+from datetime import date, time
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
+    Date,
     Enum,
     ForeignKey,
     Integer,
@@ -97,6 +98,7 @@ class Disponibilidade(Base):
     dia_semana: Mapped[DiaSemana] = mapped_column(
         Enum(DiaSemana, native_enum=False, create_constraint=True, length=10, name="dia_semana")
     )
+    data_atendimento: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     horario_inicio: Mapped[time] = mapped_column(Time)
     horario_fim: Mapped[time] = mapped_column(Time)
 

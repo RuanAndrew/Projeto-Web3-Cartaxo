@@ -22,9 +22,13 @@ HOP_BY_HOP = {
 
 
 def rotas() -> Dict[str, str]:
-    """Primeiro segmento do caminho -> URL do microsserviço."""
-    return {"documentos": settings.documentos_service_url, "agendamentos": settings.agendamento_service_url}
+    return {
+        "auth": settings.auth_service_url,
+        "documentos": settings.documentos_service_url,
+        "agendamentos": settings.agendamento_service_url,
+    }
 
+ROTAS_PUBLICAS = {("auth", "login"), ("auth", "refresh")}
 
 def validar_token(request: Request) -> None:
     """Barra no gateway quem não tem JWT válido. Os serviços revalidam por conta
@@ -47,7 +51,8 @@ async def encaminhar(prefixo: str, request: Request, caminho: str = ""):
     if destino is None:
         raise HTTPException(status_code=404, detail="Serviço não encontrado.")
 
-   # validar_token(request)
+    if (prefixo, caminho) not in ROTAS_PUBLICAS:
+        validar_token(request)
 
     tamanho = request.headers.get("content-length", "")
     if tamanho.isdigit() and int(tamanho) > settings.tamanho_maximo_requisicao_bytes:

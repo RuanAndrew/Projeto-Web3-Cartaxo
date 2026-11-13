@@ -1,24 +1,59 @@
 import { useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { sair } from "../../services/autenticacao.js";
 
 const adminNavigation = [
   {
     label: "Profissionais",
-    description: "Cadastro, especialidades e status",
     path: "/admin/profissionais",
-    icon: "✚",
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <line x1="19" y1="8" x2="19" y2="14" />
+        <line x1="22" y1="11" x2="16" y2="11" />
+      </svg>
+    ),
   },
   {
     label: "Especialidades",
-    description: "Catálogo de áreas clínicas",
     path: "/admin/especialidades",
-    icon: "✦",
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+      </svg>
+    ),
   },
   {
     label: "Configurar Agenda",
-    description: "Dias e horários de atendimento",
     path: "/admin/agenda",
-    icon: "◷",
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
+      </svg>
+    ),
   },
 ];
 
@@ -41,7 +76,7 @@ export default function AdminLayout() {
   }).format(new Date());
 
   return (
-    <div className="doctor-shell">
+    <div className="doctor-shell admin-shell">
       {menuOpen && (
         <button
           type="button"
@@ -60,8 +95,13 @@ export default function AdminLayout() {
           <span className="brand-symbol">C</span>
 
           <span className="brand-copy">
-            <strong>Clínica</strong>
-            <small>Painel administrativo</small>
+            <span className="brand-title-row">
+              <strong>Clínica</strong>
+              <span className="workspace-role-tag workspace-role-tag-admin">
+                Admin
+              </span>
+            </span>
+            <small>Gestão administrativa</small>
           </span>
         </Link>
 
@@ -80,11 +120,7 @@ export default function AdminLayout() {
               <span className="nav-icon" aria-hidden="true">
                 {item.icon}
               </span>
-
-              <span className="nav-copy">
-                <strong>{item.label}</strong>
-                <small>{item.description}</small>
-              </span>
+              <strong className="nav-title">{item.label}</strong>
             </NavLink>
           ))}
         </nav>
@@ -97,33 +133,58 @@ export default function AdminLayout() {
           <NavLink
             to="/agenda"
             onClick={() => setMenuOpen(false)}
-            className="nav-link"
+            className={({ isActive }) =>
+              `nav-link ${isActive ? "nav-link-active" : ""}`
+            }
           >
             <span className="nav-icon" aria-hidden="true">
-              ▤
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="3" y="4" width="18" height="18" rx="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
             </span>
-            <span className="nav-copy">
-              <strong>Área Clínica</strong>
-              <small>Agenda e prontuários</small>
-            </span>
+            <strong className="nav-title">Área Médica</strong>
           </NavLink>
         </nav>
 
         <div className="sidebar-spacer" />
 
-        <div className="sidebar-profile">
-          <div className="profile-avatar">AD</div>
+        <div className="sidebar-footer-card">
+          <div className="sidebar-profile">
+            <div className="profile-avatar">AD</div>
 
-          <div className="profile-copy">
-            <strong>Administração</strong>
-            <small>Gestão da clínica</small>
+            <div className="profile-copy">
+              <strong>Administração</strong>
+              <small>Admin da clínica</small>
+            </div>
           </div>
-        </div>
 
-        <Link className="sidebar-logout" to="/">
-          <span aria-hidden="true">↪</span>
-          Trocar perfil
-        </Link>
+          <Link className="sidebar-logout" to="/">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            <span>Sair da conta</span>
+          </Link>
+        </div>
       </aside>
 
       <div className="doctor-main">
@@ -146,6 +207,10 @@ export default function AdminLayout() {
           </div>
 
           <div className="topbar-right">
+            <span className="topbar-workspace-pill topbar-workspace-pill-admin">
+              <span className="topbar-workspace-dot" aria-hidden="true" />
+              Modo Admin
+            </span>
             <span className="topbar-date">{formattedDate}</span>
             <div className="topbar-avatar">AD</div>
           </div>
@@ -158,4 +223,3 @@ export default function AdminLayout() {
     </div>
   );
 }
-
