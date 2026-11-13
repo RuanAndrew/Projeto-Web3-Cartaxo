@@ -1,14 +1,19 @@
-
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useToast } from "../components/ToastProvider.jsx";
 import Card from "../components/Card.jsx";
 import Btn from "../components/Btn.jsx";
+import { obterToken } from "../utils/auth.js";
 
 const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:8000"
 ).replace(/\/$/, "");
+
+function cabecalhosAutenticados() {
+  const token = obterToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 const filters = [
   "Todas",
@@ -133,8 +138,13 @@ export default function Agenda() {
     setError("");
 
     try {
-      const response = await fetch(`${API_URL}/agendamentos`);
+      const response = await fetch(`${API_URL}/agendamentos`, {
+        headers: cabecalhosAutenticados(),
+      });
 
+      if (response.status === 401) {
+        throw new Error("Sua sessão expirou. Entre novamente.");
+}
       if (!response.ok) {
         throw new Error("Não foi possível carregar os agendamentos.");
       }
@@ -262,6 +272,7 @@ export default function Agenda() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...cabecalhosAutenticados(),
         },
         body: JSON.stringify({
           paciente_id: pacienteId,
