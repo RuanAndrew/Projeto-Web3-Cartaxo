@@ -1,15 +1,14 @@
 from datetime import datetime
 from typing import Optional
-
+from uuid import UUID
 from pydantic import BaseModel, ConfigDict
-
 from src.domain.models import StatusDocumento, TipoDocumento
 
 
 class DocumentoResponse(BaseModel):
     id: int
-    paciente_id: int
-    profissional_id: int
+    paciente_id: UUID
+    profissional_id: UUID
     atendimento_id: Optional[int] = None
     tipo: TipoDocumento
     status: StatusDocumento
