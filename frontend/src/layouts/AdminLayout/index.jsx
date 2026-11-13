@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { sair } from "../../services/autenticacao.js";
 
 const adminNavigation = [
   {
@@ -181,7 +182,7 @@ export default function AdminLayout() {
               <polyline points="16 17 21 12 16 7" />
               <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
-            <span>Trocar perfil</span>
+            <span>Sair da conta</span>
           </Link>
         </div>
       </aside>

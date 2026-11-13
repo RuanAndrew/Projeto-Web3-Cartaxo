@@ -16,11 +16,20 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
+from uuid import UUID
 
 from src.core.config import settings
 from src.infrastructure import storage
 from src.infrastructure.database import get_db
 from src.main import app
+
+from uuid import UUID
+
+from tests.integration.identificadores import (
+    ID_PROFISSIONAL,
+    ID_PACIENTE,
+    ID_OUTRO_PACIENTE,
+)
 
 RAIZ = Path(__file__).resolve().parents[2]
 NOME_BANCO_TESTE = "documentos_test"
@@ -135,26 +144,31 @@ def client(engine_teste, bucket_teste):
     yield TestClient(app)
     app.dependency_overrides.clear()
 
+# ---------- API ----------
 
-def _cabecalho(user_id: int, papel: str) -> dict:
+def _cabecalho(user_id: UUID, papel: str) -> dict:
     t = jwt.encode(
-        {"sub": str(user_id), "role": papel},
+        {
+            "sub": str(user_id),
+            "perfil": papel.upper(),
+        },
         settings.jwt_secret_key,
         algorithm=settings.jwt_algorithm,
     )
+
     return {"Authorization": f"Bearer {t}"}
 
 
 @pytest.fixture()
 def prof():
-    return _cabecalho(10, "profissional")
+    return _cabecalho(ID_PROFISSIONAL, "profissional")
 
 
 @pytest.fixture()
 def pac():
-    return _cabecalho(1, "paciente")
+    return _cabecalho(ID_PACIENTE, "paciente")
 
 
 @pytest.fixture()
 def outro_pac():
-    return _cabecalho(2, "paciente")
+    return _cabecalho(ID_OUTRO_PACIENTE, "paciente")
