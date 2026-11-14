@@ -1,12 +1,15 @@
 import logging
 from uuid import UUID
-from fastapi import Depends, FastAPI, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 from .auth import admin_only, admin_staff, current_user, service_only
 from .config import get_db
 from .repository import PacienteRepository
 from .schemas import PaginaPacientes, PacienteCreate, PacienteOut, PacienteUpdate
 from .service import PacienteService
+from .auth import ROLES_ESCRITA, ROLES_LEITURA, admin_only, admin_staff, current_user, service_only
+from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import HTTPException
 
 logging.basicConfig(level=logging.INFO)
 app = FastAPI(title="Microsserviço de Pacientes", version="1.0.0")
@@ -23,27 +26,36 @@ async def list_patients(busca: str | None = None, ativo: bool | None = None, pag
     items, total = await PacienteRepository(db).list(busca, ativo, page, limit)
     return {"items": items, "page": page, "limit": limit, "total": total}
 
+@app.get("/api/v1/pacientes/me", response_model=PacienteOut)
+async def meu_cadastro(db: AsyncSession = Depends(get_db), user=Depends(current_user)):
+    patient = await PacienteRepository(db).by_user(user["user_id"])
+    if not patient:
+        raise HTTPException(404, "Nenhum cadastro de paciente vinculado a esta conta.")
+    return patient
+
 @app.get("/api/v1/pacientes/{paciente_id}", response_model=PacienteOut)
 async def get_patient(paciente_id: UUID, db: AsyncSession = Depends(get_db), user=Depends(current_user)):
     patient = await PacienteService(db).get(paciente_id)
-    if user["role"] not in {"admin", "administrador", "recepcao", "recepção", "profissional"} and patient.user_account_id != user["user_id"]:
-        from fastapi import HTTPException
+
+    if user["role"] not in ROLES_LEITURA and patient.user_account_id != user["user_id"]:
         raise HTTPException(403, "Acesso não autorizado")
+
     return patient
 
 @app.put("/api/v1/pacientes/{paciente_id}", response_model=PacienteOut)
 async def update_patient(paciente_id: UUID, data: PacienteUpdate, db: AsyncSession = Depends(get_db), user=Depends(current_user)):
     role = user["role"]
-    staff = role in {"admin", "administrador", "recepcao", "recepção"}
+    staff = role in ROLES_ESCRITA
     patient = await PacienteService(db).get(paciente_id)
+
     if not staff and patient.user_account_id != user["user_id"]:
-        from fastapi import HTTPException
         raise HTTPException(403, "Acesso não autorizado")
+    
     if not staff:
         forbidden = set(data.model_fields_set) - {"telefone_principal", "telefone_secundario", "email", "endereco", "contato_emergencia"}
         if forbidden:
-            from fastapi import HTTPException
             raise HTTPException(403, "Paciente só pode atualizar dados de contato")
+        
     return await PacienteService(db).update(paciente_id, data, str(user["user_id"]))
 
 @app.patch("/api/v1/pacientes/{paciente_id}/inativar", response_model=PacienteOut)
@@ -53,7 +65,7 @@ async def deactivate(paciente_id: UUID, db: AsyncSession = Depends(get_db), user
 @app.get("/api/v1/pacientes/by-user/{user_account_id}", response_model=PacienteOut)
 async def by_user(user_account_id: UUID, db: AsyncSession = Depends(get_db), _=Depends(service_only)):
     patient = await PacienteRepository(db).by_user(user_account_id)
+
     if not patient:
-        from fastapi import HTTPException
         raise HTTPException(404, "Paciente não encontrado")
     return patient

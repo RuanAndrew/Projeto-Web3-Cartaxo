@@ -27,6 +27,9 @@ def require_roles(*roles):
         return user
     return dependency
 
-admin_staff = require_roles("admin", "administrador", "recepcao", "recepção", "profissional")
+ROLES_LEITURA = ("admin", "administrador", "atendente", "recepcao", "recepção", "profissional")
+ROLES_ESCRITA = ("admin", "administrador", "atendente", "recepcao", "recepção")
+
+admin_staff = require_roles(*ROLES_LEITURA)
 admin_only = require_roles("admin", "administrador")
 service_only = require_roles("service", "servico", "serviço")

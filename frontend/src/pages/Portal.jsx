@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useToast } from "../components/ToastProvider.jsx";
 import Card from "../components/Card.jsx";
 import Btn from "../components/Btn.jsx";
+import { useNavigate } from "react-router-dom";
 
 const initialExercises = [
   {
@@ -29,6 +30,7 @@ export default function Portal() {
   const [completedExercises, setCompletedExercises] = useState([]);
   const [checkedIn, setCheckedIn] = useState(false);
   const { showToast } = useToast();
+  const navigate = useNavigate();
 
   const completedCount = completedExercises.length;
 
@@ -297,7 +299,7 @@ export default function Portal() {
               <button
                 type="button"
                 onClick={() =>
-                  showToast("A área de receitas será integrada ao backend.")
+                  navigate("/portal/receitas")
                 }
               >
                 <span>＋</span>

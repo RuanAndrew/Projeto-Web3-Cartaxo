@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { obterToken } from "../utils/auth.js";
+
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
-const token = () => localStorage.getItem("access_token") || "";
+const token = () => obterToken() || "";
 const cpfMask = (v) => v.replace(/\D/g, "").slice(0, 11).replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d{1,2})$/, "$1-$2");
 const phoneMask = (v) => { const n = v.replace(/\D/g, "").slice(0, 11); return n.length > 10 ? n.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3") : n.replace(/(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3"); };
 async function api(path, options = {}) {
@@ -66,7 +68,9 @@ export function Pacientes() {
 
 export function PatientProfile() {
   const [profile, setProfile] = useState(null); const [error, setError] = useState(""); const [message, setMessage] = useState("");
-  useEffect(() => { const id = localStorage.getItem("patient_id"); if (!id) { setError("Entre na sua conta para consultar seu perfil."); return; } api(`/${id}`).then(setProfile).catch(e => setError(e.message)); }, []);
+  useEffect(() => {
+    api("/me").then(setProfile).catch((e) => setError(e.message));
+  }, []);
   async function save(e) { e.preventDefault(); try { await api(`/${profile.id}`, { method: "PUT", data: { telefone_principal: profile.telefone_principal, telefone_secundario: profile.telefone_secundario || null, email: profile.email || null } }); setMessage("Contatos atualizados."); } catch (err) { setError(err.message); } }
   return <main className="page-stack"><header className="page-heading"><div><span className="eyebrow">MEU CADASTRO</span><h1 className="page-title">Meu perfil</h1></div></header>{error && <p role="alert" className="patient-error">{error}</p>}{message && <p role="status">{message}</p>}{profile && <section className="card"><h2 className="card-title">{profile.nome_completo}</h2><p>CPF: {cpfMask(profile.cpf)} · Nascimento: {profile.data_nascimento}</p><form className="patient-form" onSubmit={save}><label>Telefone principal<input required value={profile.telefone_principal} onChange={e => setProfile({ ...profile, telefone_principal: phoneMask(e.target.value) })}/></label><label>Telefone secundário<input value={profile.telefone_secundario || ""} onChange={e => setProfile({ ...profile, telefone_secundario: phoneMask(e.target.value) })}/></label><label>E-mail<input type="email" value={profile.email || ""} onChange={e => setProfile({ ...profile, email: e.target.value })}/></label><div className="patient-form-actions"><button className="btn btn-primary">Atualizar contatos</button></div></form></section>}</main>;
 }
