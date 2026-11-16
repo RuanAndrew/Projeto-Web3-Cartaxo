@@ -1,12 +1,26 @@
-import { DEV_TOKEN } from "../config/env.js";
+import { API_URL, DEV_TOKEN } from "../config/env.js";
 
 const CHAVE_TOKEN = "clinica.token";
 const CHAVE_REFRESH = "clinica.refresh";
 const CHAVE_PERFIL = "clinica.perfil";
 
-/** Token da sessão (login real, quando existir) ou o token de teste de desenvolvimento. */
+export function tokenExpirado(token) {
+  if (!token) return true;
+  const payload = lerPayload(token);
+  if (!payload || !payload.exp) return false;
+  return payload.exp * 1000 <= Date.now() + 5000;
+}
+
+/** Token da sessão ativa (ignora tokens de dev já expirados). */
 export function obterToken() {
-  return sessionStorage.getItem(CHAVE_TOKEN) || DEV_TOKEN || null;
+  const sessao = sessionStorage.getItem(CHAVE_TOKEN);
+  if (sessao && !tokenExpirado(sessao)) {
+    return sessao;
+  }
+  if (DEV_TOKEN && !tokenExpirado(DEV_TOKEN)) {
+    return DEV_TOKEN;
+  }
+  return sessao || null;
 }
 
 export function salvarToken(token) {
@@ -37,6 +51,74 @@ export function removerSessao() {
   sessionStorage.removeItem(CHAVE_TOKEN);
   sessionStorage.removeItem(CHAVE_REFRESH);
   sessionStorage.removeItem(CHAVE_PERFIL);
+}
+
+let promessaRenovacao = null;
+
+/**
+ * Tenta renovar o access_token usando o refresh_token salvo na sessão.
+ * Em ambiente de desenvolvimento, caso não haja refresh_token válido ao
+ * alternar entre painéis, reconecta com a credencial clínica de desenvolvimento.
+ */
+export async function garantirSessaoValida() {
+  const atual = sessionStorage.getItem(CHAVE_TOKEN);
+  if (atual && !tokenExpirado(atual)) {
+    return atual;
+  }
+
+  if (promessaRenovacao) {
+    return promessaRenovacao;
+  }
+
+  promessaRenovacao = (async () => {
+    const refresh = obterRefreshToken();
+    if (refresh) {
+      try {
+        const resp = await fetch(`${API_URL}/auth/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: refresh }),
+        });
+        if (resp.ok) {
+          const dados = await resp.json();
+          salvarToken(dados.access_token);
+          if (dados.refresh_token) salvarRefreshToken(dados.refresh_token);
+          if (dados.usuario?.perfil) salvarPerfil(dados.usuario.perfil);
+          return dados.access_token;
+        }
+      } catch {
+        /* prossegue para fallback */
+      }
+    }
+
+    if (import.meta.env.DEV) {
+      try {
+        const resp = await fetch(`${API_URL}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: "admin@clinica.dev",
+            senha: "admin123",
+          }),
+        });
+        if (resp.ok) {
+          const dados = await resp.json();
+          salvarToken(dados.access_token);
+          if (dados.refresh_token) salvarRefreshToken(dados.refresh_token);
+          if (dados.usuario?.perfil) salvarPerfil(dados.usuario.perfil);
+          return dados.access_token;
+        }
+      } catch {
+        /* sem conexão */
+      }
+    }
+
+    return null;
+  })().finally(() => {
+    promessaRenovacao = null;
+  });
+
+  return promessaRenovacao;
 }
 
 export function rotaPorPerfil(perfil) {
@@ -71,10 +153,10 @@ export function lerPayload(token) {
   }
 }
 
-/** Id do paciente logado (claim "sub" do token) ou null. */
+/** Id do paciente logado (claim "sub" do token como UUID/string) ou null. */
 export function obterPacienteId() {
   const token = obterToken();
   if (!token) return null;
-  const id = Number(lerPayload(token)?.sub);
-  return Number.isInteger(id) && id > 0 ? id : null;
+  const sub = lerPayload(token)?.sub;
+  return sub ? String(sub) : null;
 }

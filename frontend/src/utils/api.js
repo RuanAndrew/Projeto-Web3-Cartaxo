@@ -1,5 +1,5 @@
 import { API_URL } from "../config/env.js";
-import { obterToken } from "./auth.js";
+import { garantirSessaoValida, obterToken, removerToken } from "./auth.js";
 
 export class ApiError extends Error {
   constructor(status, mensagem) {
@@ -19,7 +19,7 @@ export function mensagemPorStatus(status, detalhe) {
 
 /** GET autenticado no API Gateway. Devolve o JSON ou lança ApiError com mensagem pronta para exibir. */
 export async function apiGet(caminho, { signal } = {}) {
-  const token = obterToken();
+  let token = obterToken() || (await garantirSessaoValida());
   if (!token) throw new ApiError(401, mensagemPorStatus(401));
 
   let resposta;
@@ -28,6 +28,16 @@ export async function apiGet(caminho, { signal } = {}) {
       headers: { Authorization: `Bearer ${token}` },
       signal,
     });
+    if (resposta.status === 401) {
+      removerToken();
+      token = await garantirSessaoValida();
+      if (token) {
+        resposta = await fetch(`${API_URL}${caminho}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal,
+        });
+      }
+    }
   } catch (erro) {
     if (erro.name === "AbortError") throw erro;
     throw new ApiError(0, "Não foi possível conectar ao servidor.");

@@ -168,7 +168,13 @@ export default function AdminLayout() {
             </div>
           </div>
 
-          <Link className="sidebar-logout" to="/">
+          <Link
+            className="sidebar-logout"
+            to="/"
+            onClick={() => {
+              sair();
+            }}
+          >
             <svg
               viewBox="0 0 24 24"
               fill="none"

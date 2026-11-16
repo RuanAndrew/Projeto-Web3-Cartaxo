@@ -794,112 +794,230 @@ export default function AgendaConfigAdmin() {
             </div>
           </div>
 
-          <span className="schedule-header-badge schedule-badge-neutral">
+          <span
+            className={`schedule-header-badge ${
+              resultadosBusca.length > 0
+                ? "schedule-badge-active"
+                : "schedule-badge-neutral"
+            }`}
+          >
             {resultadosBusca.length} horário(s) encontrado(s)
           </span>
         </header>
 
         <div className="schedule-panel-body">
-          <div className="schedule-filter-bar schedule-filter-bar-4cols">
-            <div className="schedule-filter-field">
-              <label
-                className="schedule-filter-label"
-                htmlFor="filtro-especialidade-uc08"
-              >
-                Especialidade
-              </label>
-              <select
-                id="filtro-especialidade-uc08"
-                className="form-input admin-select"
-                aria-label="Filtrar busca por especialidade"
-                value={buscaEspecialidadeId}
-                onChange={(e) => setBuscaEspecialidadeId(e.target.value)}
-              >
-                <option value="">Todas as especialidades</option>
-                {especialidades.map((esp) => (
-                  <option key={esp.id} value={esp.id}>
-                    {esp.nome}
-                  </option>
-                ))}
-              </select>
+          <div className="schedule-filter-box">
+            <div className="schedule-filter-box-head">
+              <div className="schedule-filter-box-title">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+                </svg>
+                <span>Filtros de pesquisa</span>
+                {temFiltroBusca && (
+                  <span className="schedule-filter-active-pill">
+                    {[
+                      buscaEspecialidadeId,
+                      buscaProfissionalId,
+                      buscaData,
+                      buscaDia,
+                    ].filter(Boolean).length}{" "}
+                    ativo(s)
+                  </span>
+                )}
+              </div>
+
+              <div className="schedule-filter-quick-actions">
+                <button
+                  type="button"
+                  className={`date-shortcut-chip ${
+                    buscaData === hojeIso() ? "date-shortcut-chip-active" : ""
+                  }`}
+                  onClick={() =>
+                    setBuscaData(buscaData === hojeIso() ? "" : hojeIso())
+                  }
+                >
+                  Hoje
+                </button>
+                <button
+                  type="button"
+                  className={`date-shortcut-chip ${
+                    buscaData === somarDiasIso(hojeIso(), 1)
+                      ? "date-shortcut-chip-active"
+                      : ""
+                  }`}
+                  onClick={() => {
+                    const amanha = somarDiasIso(hojeIso(), 1);
+                    setBuscaData(buscaData === amanha ? "" : amanha);
+                  }}
+                >
+                  Amanhã
+                </button>
+                {temFiltroBusca && (
+                  <button
+                    type="button"
+                    className="schedule-filter-clear-btn"
+                    onClick={limparFiltrosBusca}
+                  >
+                    ✕ Limpar filtros
+                  </button>
+                )}
+              </div>
             </div>
 
-            <div className="schedule-filter-field">
-              <label
-                className="schedule-filter-label"
-                htmlFor="filtro-profissional-uc08"
-              >
-                Profissional ativo
-              </label>
-              <select
-                id="filtro-profissional-uc08"
-                className="form-input admin-select"
-                aria-label="Filtrar busca por profissional"
-                value={buscaProfissionalId}
-                onChange={(e) => setBuscaProfissionalId(e.target.value)}
-              >
-                <option value="">Todos os profissionais ativos</option>
-                {profissionais
-                  .filter((p) => p.ativo)
-                  .map((prof) => (
-                    <option key={prof.id} value={prof.id}>
-                      {prof.nome}
+            <div className="schedule-filter-bar schedule-filter-bar-4cols">
+              <div className="schedule-filter-field">
+                <label
+                  className="schedule-filter-label"
+                  htmlFor="filtro-especialidade-uc08"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8l-6.2 4.5 2.4-7.4L2 9.4h7.6z" />
+                  </svg>
+                  Especialidade
+                </label>
+                <select
+                  id="filtro-especialidade-uc08"
+                  className={`form-input schedule-filter-control ${
+                    buscaEspecialidadeId ? "schedule-filter-control-active" : ""
+                  }`}
+                  aria-label="Filtrar busca por especialidade"
+                  value={buscaEspecialidadeId}
+                  onChange={(e) => setBuscaEspecialidadeId(e.target.value)}
+                >
+                  <option value="">Todas as especialidades</option>
+                  {especialidades.map((esp) => (
+                    <option key={esp.id} value={esp.id}>
+                      {esp.nome}
                     </option>
                   ))}
-              </select>
-            </div>
-
-            <div className="schedule-filter-field">
-              <label
-                className="schedule-filter-label"
-                htmlFor="filtro-data-uc08"
-              >
-                Data do atendimento
-              </label>
-              <input
-                id="filtro-data-uc08"
-                type="date"
-                className="form-input admin-select"
-                aria-label="Filtrar busca por data do atendimento"
-                value={buscaData}
-                onChange={(e) => setBuscaData(e.target.value)}
-              />
-            </div>
-
-            <div className="schedule-filter-field">
-              <label
-                className="schedule-filter-label"
-                htmlFor="filtro-dia-uc08"
-              >
-                Dia da semana
-              </label>
-              <select
-                id="filtro-dia-uc08"
-                className="form-input admin-select"
-                aria-label="Filtrar busca por dia da semana"
-                value={buscaDia}
-                onChange={(e) => setBuscaDia(e.target.value)}
-              >
-                <option value="">Todos os dias da semana</option>
-                {DIAS_SEMANA.map((d) => (
-                  <option key={d.value} value={d.value}>
-                    {d.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {temFiltroBusca && (
-              <div className="schedule-filter-reset">
-                <Btn
-                  variant="secondary"
-                  size="sm"
-                  onClick={limparFiltrosBusca}
-                >
-                  Limpar filtros
-                </Btn>
+                </select>
               </div>
-            )}
+
+              <div className="schedule-filter-field">
+                <label
+                  className="schedule-filter-label"
+                  htmlFor="filtro-profissional-uc08"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                  Profissional ativo
+                </label>
+                <select
+                  id="filtro-profissional-uc08"
+                  className={`form-input schedule-filter-control ${
+                    buscaProfissionalId ? "schedule-filter-control-active" : ""
+                  }`}
+                  aria-label="Filtrar busca por profissional"
+                  value={buscaProfissionalId}
+                  onChange={(e) => setBuscaProfissionalId(e.target.value)}
+                >
+                  <option value="">Todos os profissionais ativos</option>
+                  {profissionais
+                    .filter((p) => p.ativo)
+                    .map((prof) => (
+                      <option key={prof.id} value={prof.id}>
+                        {prof.nome}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div className="schedule-filter-field">
+                <label
+                  className="schedule-filter-label"
+                  htmlFor="filtro-data-uc08"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                  Data do atendimento
+                </label>
+                <input
+                  id="filtro-data-uc08"
+                  type="date"
+                  className={`form-input schedule-filter-control ${
+                    buscaData ? "schedule-filter-control-active" : ""
+                  }`}
+                  aria-label="Filtrar busca por data do atendimento"
+                  value={buscaData}
+                  onChange={(e) => setBuscaData(e.target.value)}
+                />
+              </div>
+
+              <div className="schedule-filter-field">
+                <label
+                  className="schedule-filter-label"
+                  htmlFor="filtro-dia-uc08"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  Dia da semana
+                </label>
+                <select
+                  id="filtro-dia-uc08"
+                  className={`form-input schedule-filter-control ${
+                    buscaDia ? "schedule-filter-control-active" : ""
+                  }`}
+                  aria-label="Filtrar busca por dia da semana"
+                  value={buscaDia}
+                  onChange={(e) => setBuscaDia(e.target.value)}
+                >
+                  <option value="">Todos os dias da semana</option>
+                  {DIAS_SEMANA.map((d) => (
+                    <option key={d.value} value={d.value}>
+                      {d.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
 
           {loadingBusca ? (

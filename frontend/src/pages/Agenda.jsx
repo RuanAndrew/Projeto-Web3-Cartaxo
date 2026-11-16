@@ -326,22 +326,6 @@ export default function Agenda() {
 
   return (
     <div className="page-stack">
-      <section className="page-heading">
-        <div>
-          <span className="eyebrow">VISÃO GERAL</span>
-
-          <h2 className="page-title">Sua agenda clínica</h2>
-
-          <p className="page-subtitle">
-            Organize seus atendimentos e acompanhe a rotina da clínica.
-          </p>
-        </div>
-
-        <Btn onClick={handleNewAppointment}>
-          <span aria-hidden="true">＋</span> Nova consulta
-        </Btn>
-      </section>
-
       {showForm && (
         <Card
           title="Novo agendamento"
@@ -469,24 +453,27 @@ export default function Agenda() {
       <div className="page-toolbar">
         <div>
           <h3 className="section-title">Atendimentos</h3>
-          <p className="section-description">
-            Horários e informações dos pacientes.
-          </p>
         </div>
 
-        <label className="search-field">
-          <span className="search-symbol" aria-hidden="true">
-            ⌕
-          </span>
+        <div className="patient-filters-bar">
+          <label className="search-field">
+            <span className="search-symbol" aria-hidden="true">
+              ⌕
+            </span>
 
-          <input
-            type="search"
-            aria-label="Buscar paciente ou profissional"
-            placeholder="Buscar paciente..."
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
+            <input
+              type="search"
+              aria-label="Buscar paciente ou profissional"
+              placeholder="Buscar paciente..."
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+
+          <Btn onClick={handleNewAppointment}>
+            <span aria-hidden="true">＋</span> Nova consulta
+          </Btn>
+        </div>
       </div>
 
       <div className="appointment-filters" aria-label="Filtrar consultas">
