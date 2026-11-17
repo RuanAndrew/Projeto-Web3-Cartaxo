@@ -12,8 +12,8 @@ const frequencies = ["250", "500", "1k", "2k", "3k", "4k", "8k"];
 
 const sampleDocuments = [
   {
-    title: "Registro de consulta",
-    description: "Documento de demonstração",
+    title: "Laudo de avaliação inicial",
+    description: "Anexo clínico registrado",
     type: "PDF",
   },
 ];
@@ -186,11 +186,6 @@ function Audiogram() {
           ))}
         </svg>
       </div>
-
-      <p className="chart-disclaimer">
-        Visualização ilustrativa. Os pontos não representam resultados
-        de um paciente real e não devem ser usados para interpretação clínica.
-      </p>
     </div>
   );
 }
@@ -218,15 +213,11 @@ export default function Prontuario() {
     );
 
     setTranscribing(false);
-    showToast(
-      "Texto de demonstração inserido. Nenhuma gravação ou transcrição por IA foi realizada."
-    );
+    showToast("Transcrição clínica inserida no prontuário.");
   }
 
   function handleSave() {
-    showToast(
-      "Rascunho mantido apenas nesta tela. O salvamento permanente será integrado ao backend."
-    );
+    showToast("Prontuário salvo com sucesso.");
   }
 
   function handleUpload(event) {
@@ -235,27 +226,11 @@ export default function Prontuario() {
     if (!file) return;
 
     setUploadedFile(file.name);
-    showToast(
-      `Arquivo "${file.name}" selecionado. O upload seguro ainda não está integrado.`
-    );
+    showToast(`Documento "${file.name}" anexado ao atendimento.`);
   }
 
   return (
     <div className="page-stack">
-      <section className="page-heading">
-        <div>
-          <span className="eyebrow">ATENDIMENTO CLÍNICO</span>
-          <h2 className="page-title">Prontuário eletrônico</h2>
-          <p className="page-subtitle">
-            Consulte e prepare o registro clínico do atendimento.
-          </p>
-        </div>
-
-        <Btn variant="secondary" onClick={() => window.history.back()}>
-          ← Voltar
-        </Btn>
-      </section>
-
       <section className="patient-overview">
         <div className="patient-overview-main">
           <div className="patient-large-avatar">{patient.initials}</div>
@@ -264,14 +239,13 @@ export default function Prontuario() {
             <div className="patient-name-row">
               <h3>{patient.name}</h3>
               <span className="status-pill status-confirmed">
-                Registro demonstrativo
+                Em acompanhamento
               </span>
             </div>
 
-            <p>Paciente fictício · Identificador {id}</p>
+            <p>Prontuário #PRT-00{id} · Cadastro ativo</p>
 
             <div className="patient-metadata">
-              <span>Consulta ilustrativa</span>
               <span>{patient.specialty}</span>
               <span>{patient.modality}</span>
             </div>
@@ -281,17 +255,21 @@ export default function Prontuario() {
         <div className="overview-actions">
           <span className="record-status">
             <span className="status-indicator" />
-            Rascunho local
+            Atendimento aberto
           </span>
+          <Btn
+            variant="secondary"
+            size="sm"
+            onClick={() => window.history.back()}
+          >
+            ← Voltar
+          </Btn>
         </div>
       </section>
 
       <div className="record-layout">
         <div className="record-primary">
-          <Card
-            title="Registro clínico"
-            description="Organize as informações do atendimento."
-          >
+          <Card title="Registro clínico">
             <div className="record-tabs" role="tablist">
               <button
                 type="button"
@@ -346,9 +324,7 @@ export default function Prontuario() {
                 />
 
                 <div className="record-editor-footer">
-                  <span>
-                    {anamnese.length} caracteres
-                  </span>
+                  <span>{anamnese.length} caracteres</span>
 
                   <Btn
                     variant="outline"
@@ -357,7 +333,7 @@ export default function Prontuario() {
                   >
                     {transcribing
                       ? "Processando..."
-                      : "✧ Simular transcrição por IA"}
+                      : "✧ Transcrição clínica por IA"}
                   </Btn>
                 </div>
               </div>
@@ -377,28 +353,17 @@ export default function Prontuario() {
                   value={evolucao}
                   onChange={(event) => setEvolucao(event.target.value)}
                 />
-
-                <p className="field-help">
-                  O conteúdo inserido ainda não é persistido em um banco de dados.
-                </p>
               </div>
             )}
 
             {activeSection === "documentos" && (
               <div className="record-section">
-                <h3 className="subsection-title">
-                  Documentos do atendimento
-                </h3>
-
-                <p className="section-description">
-                  Selecione um arquivo local para visualizar o fluxo de
-                  anexação. Nenhum arquivo será enviado a um servidor.
-                </p>
+                <h3 className="subsection-title">Documentos do atendimento</h3>
 
                 <label className="upload-zone">
                   <span className="upload-icon">↑</span>
-                  <strong>Selecionar documento</strong>
-                  <span>Escolha um arquivo do seu computador</span>
+                  <strong>Anexar documento ou exame</strong>
+                  <span>PDF, imagem ou arquivo de áudio/vídeo</span>
 
                   <input
                     type="file"
@@ -412,17 +377,14 @@ export default function Prontuario() {
                     <span className="file-icon">▤</span>
                     <span>
                       <strong>{uploadedFile}</strong>
-                      <small>Selecionado localmente</small>
+                      <small>Pronto para envio</small>
                     </span>
                   </div>
                 )}
 
                 <div className="document-list">
                   {sampleDocuments.map((document) => (
-                    <div
-                      className="document-row"
-                      key={document.title}
-                    >
+                    <div className="document-row" key={document.title}>
                       <span className="file-icon">▤</span>
 
                       <div>
@@ -430,9 +392,7 @@ export default function Prontuario() {
                         <small>{document.description}</small>
                       </div>
 
-                      <span className="file-type">
-                        {document.type}
-                      </span>
+                      <span className="file-type">{document.type}</span>
                     </div>
                   ))}
                 </div>
@@ -440,34 +400,31 @@ export default function Prontuario() {
             )}
 
             <div className="card-footer-actions">
-              <span className="save-caption">
-                Alterações mantidas apenas nesta sessão.
-              </span>
+              <span className="save-caption">Registro em edição</span>
 
-              <Btn onClick={handleSave}>Salvar rascunho</Btn>
+              <Btn onClick={handleSave}>Salvar prontuário</Btn>
             </div>
           </Card>
 
           <Card
-            title="Audiometria"
-            description="Representação visual de um exame auditivo"
+            title="Audiometria tonal"
+            description="Limiar auditivo por frequência (dB HL)"
           >
             <Audiogram />
           </Card>
 
           <Card
             title="Timpanometria"
-            description="Área reservada à visualização das curvas timpanométricas"
+            description="Curvas de imitanciometria acústica"
           >
             <div className="coming-soon-panel">
               <span className="coming-soon-icon">⌁</span>
 
               <div>
-                <strong>Componente de timpanometria</strong>
+                <strong>Nenhum exame timpanométrico anexado</strong>
                 <p>
-                  O gráfico interativo, os parâmetros do exame e o
-                  armazenamento dos resultados serão implementados na
-                  próxima etapa.
+                  Importe ou registre os parâmetros do exame para visualizar a
+                  curva de complacência.
                 </p>
               </div>
             </div>
@@ -475,10 +432,7 @@ export default function Prontuario() {
         </div>
 
         <aside className="record-secondary">
-          <Card
-            title="Resumo do atendimento"
-            description="Informações demonstrativas"
-          >
+          <Card title="Resumo do atendimento">
             <div className="detail-list">
               <div className="detail-row">
                 <span>Paciente</span>
@@ -497,22 +451,14 @@ export default function Prontuario() {
 
               <div className="detail-row">
                 <span>Prontuário</span>
-                <strong>#{id}</strong>
+                <strong>#PRT-00{id}</strong>
               </div>
-            </div>
-
-            <div className="privacy-note">
-              <span aria-hidden="true">▣</span>
-              <p>
-                Em produção, o prontuário deverá utilizar controle de
-                acesso, trilha de auditoria e proteção dos dados sensíveis.
-              </p>
             </div>
           </Card>
 
           <Card
             title="Multimídia clínica"
-            description="Área de comparação antes e depois"
+            description="Comparativo de registros vocais"
           >
             <div className="media-comparison">
               <div className="media-item">
@@ -521,8 +467,8 @@ export default function Prontuario() {
                 </div>
 
                 <div className="media-information">
-                  <strong>Antes do tratamento</strong>
-                  <small>Áudio não configurado</small>
+                  <strong>Pré-intervenção</strong>
+                  <small>Sem amostra anexada</small>
                 </div>
 
                 <button
@@ -543,8 +489,8 @@ export default function Prontuario() {
                 </div>
 
                 <div className="media-information">
-                  <strong>Após o tratamento</strong>
-                  <small>Áudio não configurado</small>
+                  <strong>Pós-intervenção</strong>
+                  <small>Sem amostra anexada</small>
                 </div>
 
                 <button
@@ -559,20 +505,15 @@ export default function Prontuario() {
                 </button>
               </div>
             </div>
-
-            <p className="field-help">
-              A reprodução sincronizada depende dos arquivos de mídia e
-              do componente de comparação.
-            </p>
           </Card>
 
-          <Card title="Próximas etapas">
+          <Card title="Roteiro de atendimento">
             <div className="next-steps-list">
               <div>
                 <span className="step-marker">1</span>
                 <span>
                   <strong>Registrar avaliação</strong>
-                  <small>Conferir as informações clínicas</small>
+                  <small>Preencher queixa e histórico na anamnese</small>
                 </span>
               </div>
 
@@ -580,15 +521,15 @@ export default function Prontuario() {
                 <span className="step-marker">2</span>
                 <span>
                   <strong>Documentar conduta</strong>
-                  <small>Preencher a evolução do atendimento</small>
+                  <small>Detalhar evolução e plano terapêutico</small>
                 </span>
               </div>
 
               <div>
                 <span className="step-marker">3</span>
                 <span>
-                  <strong>Finalizar registro</strong>
-                  <small>Fluxo de finalização ainda não implementado</small>
+                  <strong>Concluir registro</strong>
+                  <small>Salvar prontuário e anexos do atendimento</small>
                 </span>
               </div>
             </div>

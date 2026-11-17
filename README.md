@@ -17,9 +17,11 @@ Requisitos: Node.js, npm, Docker e Docker Compose.
 
 cd frontend
 
-npm ci
+npm install
 
 npm run dev
+
+O Microsserviço de Pacientes pode ser iniciado com `docker compose up --build pacientes-db pacientes-service api-gateway`. Consulte [backend/pacientes-service/README.md](backend/pacientes-service/README.md) para configuração, autorização e testes.
 
 ### Integrantes
 
