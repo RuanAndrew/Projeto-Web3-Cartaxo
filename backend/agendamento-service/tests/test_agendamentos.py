@@ -191,3 +191,55 @@ async def test_cancelar_e_bloquear_reativacao_por_paciente(client: AsyncClient):
         f"/agendamentos/{agendamento_id}/reativar", headers=headers_paciente
     )
     assert resp_reativar.status_code == 403
+
+async def test_criar_teleconsulta_e_registrar_link_meet(client: AsyncClient):
+    prof_id = uuid.uuid4()
+    token_prof = gerar_token("PROFISSIONAL", user_id=prof_id)
+    headers_prof = {"Authorization": f"Bearer {token_prof}"}
+    data_futura = (datetime.now(timezone.utc) + timedelta(days=5)).isoformat()
+
+    payload = {
+        "paciente_id": str(uuid.uuid4()),
+        "profissional_id": str(prof_id),
+        "data_hora": data_futura,
+        "duracao_minutos": 30,
+        "modalidade": "teleconsulta",
+    }
+    resp_create = await client.post("/agendamentos", json=payload, headers=headers_prof)
+    assert resp_create.status_code == 201
+    criado = resp_create.json()
+    assert criado["modalidade"] == "teleconsulta"
+    assert criado["link_teleconsulta"] is None
+
+    link_meet = "https://meet.google.com/abc-defg-hij"
+    resp_link = await client.patch(
+        f"/agendamentos/{criado['id']}/teleconsulta",
+        json={"link_teleconsulta": link_meet},
+        headers=headers_prof,
+    )
+    assert resp_link.status_code == 200
+    assert resp_link.json()["link_teleconsulta"] == link_meet
+
+
+async def test_paciente_nao_pode_alterar_link_teleconsulta(client: AsyncClient):
+    paciente_id = uuid.uuid4()
+    token_paciente = gerar_token("PACIENTE", user_id=paciente_id)
+    headers_paciente = {"Authorization": f"Bearer {token_paciente}"}
+    data_futura = (datetime.now(timezone.utc) + timedelta(days=6)).isoformat()
+
+    payload = {
+        "paciente_id": str(paciente_id),
+        "profissional_id": str(uuid.uuid4()),
+        "data_hora": data_futura,
+        "modalidade": "teleconsulta",
+    }
+    resp_create = await client.post("/agendamentos", json=payload, headers=headers_paciente)
+    assert resp_create.status_code == 201
+    agendamento_id = resp_create.json()["id"]
+
+    resp_link = await client.patch(
+        f"/agendamentos/{agendamento_id}/teleconsulta",
+        json={"link_teleconsulta": "https://meet.google.com/xyz-1234-uvw"},
+        headers=headers_paciente,
+    )
+    assert resp_link.status_code == 403

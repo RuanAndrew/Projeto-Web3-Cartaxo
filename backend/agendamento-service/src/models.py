@@ -26,6 +26,12 @@ class AgendamentoDB(Base):
     duracao_minutos: Mapped[int] = mapped_column(
         Integer, nullable=False, default=30
     )
+    modalidade: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="presencial"
+    )
+    link_teleconsulta: Mapped[str | None] = mapped_column(
+        String(500), nullable=True
+    )
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="agendado"
     )

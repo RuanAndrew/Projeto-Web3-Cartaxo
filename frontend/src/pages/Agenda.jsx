@@ -4,8 +4,10 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "../components/ToastProvider.jsx";
 import Card from "../components/Card.jsx";
 import Btn from "../components/Btn.jsx";
+import { listarProfissionais } from "../services/profissionaisApi.js";
 import {
   garantirSessaoValida,
+  lerPayload,
   obterToken,
   removerToken,
 } from "../utils/auth.js";
@@ -14,48 +16,8 @@ const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:8000"
 ).replace(/\/$/, "");
 
-const PACIENTES_CONHECIDOS = {
-  1: {
-    nome: "Ana Beatriz Lima",
-    especialidade: "Otorrinolaringologia",
-    modalidade: "Presencial",
-  },
-  2: {
-    nome: "Pedro Henrique Costa",
-    especialidade: "Fonoaudiologia",
-    modalidade: "Teleconsulta",
-  },
-  3: {
-    nome: "João Silva",
-    especialidade: "Otorrinolaringologia",
-    modalidade: "Teleconsulta",
-  },
-  4: {
-    nome: "Mariana Oliveira",
-    especialidade: "Fonoaudiologia",
-    modalidade: "Presencial",
-  },
-};
-
-const CHAVE_CONCLUIDOS_LOCAL = "clinica.agendamentos.concluidos";
-const CHAVE_RETOMADOS_LOCAL = "clinica.agendamentos.retomados";
-
-function lerListaLocal(chave) {
-  try {
-    const raw = sessionStorage.getItem(chave);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function salvarListaLocal(chave, ids) {
-  try {
-    sessionStorage.setItem(chave, JSON.stringify(ids));
-  } catch {
-    /* ignora erro de storage */
-  }
-}
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 async function fetchComSessao(url, options = {}) {
   let token = obterToken() || (await garantirSessaoValida());
@@ -92,10 +54,12 @@ const FILTROS_AGENDA = [
 
 const initialFormData = {
   paciente_id: "",
-  profissional_id: "1",
+  profissional_id: "",
   data: "",
   horario: "",
   duracao_minutos: "30",
+  modalidade: "presencial",
+  link_teleconsulta: "",
 };
 
 function initialsFromName(name) {
@@ -129,32 +93,12 @@ function formatTime(value) {
   });
 }
 
-function resolverDadosPaciente(pacienteId) {
-  const conhecido = PACIENTES_CONHECIDOS[Number(pacienteId)];
-  if (conhecido) {
-    return {
-      nome: conhecido.nome,
-      codigo: `Paciente #${pacienteId}`,
-      especialidade: conhecido.especialidade,
-      modalidade: conhecido.modalidade,
-    };
-  }
-  return {
-    nome: `Paciente #${pacienteId}`,
-    codigo: `ID ${pacienteId}`,
-    especialidade: "Clínica Geral",
-    modalidade: "Presencial",
-  };
+function resumirUuid(id) {
+  const texto = String(id || "");
+  return texto.length > 8 ? `${texto.slice(0, 8)}...` : texto;
 }
 
-function getAppointmentStatus(status, isCompletedLocal) {
-  if (isCompletedLocal) {
-    return {
-      label: "Concluído",
-      key: "completed",
-    };
-  }
-
+function getAppointmentStatus(status) {
   const statuses = {
     agendado: {
       label: "Programado",
@@ -191,12 +135,9 @@ export default function Agenda() {
   const { showToast } = useToast();
 
   const [appointments, setAppointments] = useState([]);
-  const [concluidosIds, setConcluidosIds] = useState(() =>
-    lerListaLocal(CHAVE_CONCLUIDOS_LOCAL)
-  );
-  const [retomadosIds, setRetomadosIds] = useState(() =>
-    lerListaLocal(CHAVE_RETOMADOS_LOCAL)
-  );
+  const [pacientesMap, setPacientesMap] = useState({});
+  const [pacientesLista, setPacientesLista] = useState([]);
+  const [profissionaisLista, setProfissionaisLista] = useState([]);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("Todas");
   const [loading, setLoading] = useState(true);
@@ -204,7 +145,44 @@ export default function Agenda() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busyActionId, setBusyActionId] = useState(null);
+  const [editingLinkId, setEditingLinkId] = useState(null);
+  const [linkDraft, setLinkDraft] = useState("");
   const [formData, setFormData] = useState(initialFormData);
+
+  const usuarioAtual = useMemo(() => {
+    const token = obterToken();
+    return token ? lerPayload(token) : null;
+  }, []);
+
+  async function carregarCatalogos() {
+    try {
+      const respPac = await fetchComSessao(`${API_URL}/api/v1/pacientes`);
+      if (respPac.ok) {
+        const dadosPac = await respPac.json();
+        const lista = Array.isArray(dadosPac)
+          ? dadosPac
+          : Array.isArray(dadosPac?.items)
+            ? dadosPac.items
+            : [];
+        setPacientesLista(lista);
+        const mapa = {};
+        for (const p of lista) {
+          if (p?.id) mapa[String(p.id)] = p;
+        }
+        setPacientesMap(mapa);
+      }
+    } catch {
+      /* fallback para entrada manual de UUID se pacientes-service estiver offline */
+    }
+
+    try {
+      const dadosProf = await listarProfissionais({ ativo: true });
+      const listaProf = Array.isArray(dadosProf) ? dadosProf : [];
+      setProfissionaisLista(listaProf);
+    } catch {
+      /* fallback para entrada manual de UUID se profissionais-service estiver offline */
+    }
+  }
 
   async function loadAppointments() {
     setLoading(true);
@@ -238,28 +216,41 @@ export default function Agenda() {
   }
 
   useEffect(() => {
+    carregarCatalogos();
     loadAppointments();
   }, []);
 
+  const profissionaisMap = useMemo(() => {
+    const mapa = {};
+    for (const prof of profissionaisLista) {
+      if (prof?.id) mapa[String(prof.id)] = prof;
+    }
+    return mapa;
+  }, [profissionaisLista]);
+
   const enrichedAppointments = useMemo(() => {
     return appointments.map((apt) => {
-      const statusEfetivo =
-        apt.status === "cancelado" && retomadosIds.includes(apt.id)
-          ? "agendado"
-          : apt.status;
-      const isCompletedLocal =
-        statusEfetivo !== "cancelado" && concluidosIds.includes(apt.id);
-      const statusInfo = getAppointmentStatus(statusEfetivo, isCompletedLocal);
-      const pacienteInfo = resolverDadosPaciente(apt.paciente_id);
+      const statusInfo = getAppointmentStatus(apt.status);
+      const pac = pacientesMap[String(apt.paciente_id)];
+      const prof = profissionaisMap[String(apt.profissional_id)];
+      const especialidadeProf =
+        prof?.especialidades?.[0]?.nome || "Atendimento Clínico";
+      const isTeleconsulta = apt.modalidade === "teleconsulta";
 
       return {
         ...apt,
-        status: statusEfetivo,
         statusInfo,
-        pacienteInfo,
+        isTeleconsulta,
+        pacienteInfo: {
+          nome: pac?.nome || `Paciente (${resumirUuid(apt.paciente_id)})`,
+          codigo: `ID ${resumirUuid(apt.paciente_id)}`,
+          especialidade: especialidadeProf,
+          profissionalNome: prof?.nome || null,
+          modalidadeLabel: isTeleconsulta ? "Teleconsulta" : "Presencial",
+        },
       };
     });
-  }, [appointments, concluidosIds, retomadosIds]);
+  }, [appointments, pacientesMap, profissionaisMap]);
 
   const visibleAppointments = useMemo(() => {
     const search = query.trim().toLowerCase();
@@ -272,7 +263,8 @@ export default function Agenda() {
         pacienteInfo.nome.toLowerCase().includes(search) ||
         pacienteInfo.codigo.toLowerCase().includes(search) ||
         pacienteInfo.especialidade.toLowerCase().includes(search) ||
-        String(appointment.id ?? "").includes(search) ||
+        pacienteInfo.modalidadeLabel.toLowerCase().includes(search) ||
+        String(appointment.id ?? "").toLowerCase().includes(search) ||
         statusInfo.label.toLowerCase().includes(search);
 
       const isPending =
@@ -313,7 +305,17 @@ export default function Agenda() {
   }, [enrichedAppointments]);
 
   function handleNewAppointment() {
-    setFormData({ ...initialFormData });
+    const defaultProfId =
+      usuarioAtual?.perfil === "PROFISSIONAL" && usuarioAtual?.sub
+        ? String(usuarioAtual.sub)
+        : profissionaisLista[0]?.id
+          ? String(profissionaisLista[0].id)
+          : "";
+
+    setFormData({
+      ...initialFormData,
+      profissional_id: defaultProfId,
+    });
     setShowForm((prev) => !prev);
   }
 
@@ -322,6 +324,9 @@ export default function Agenda() {
     setFormData((current) => ({
       ...current,
       [name]: value,
+      ...(name === "modalidade" && value === "presencial"
+        ? { link_teleconsulta: "" }
+        : {}),
     }));
   }
 
@@ -329,17 +334,12 @@ export default function Agenda() {
     event.preventDefault();
     if (saving) return;
 
-    const pacienteId = Number(formData.paciente_id);
-    const profissionalId = Number(formData.profissional_id);
+    const pacienteId = formData.paciente_id.trim();
+    const profissionalId = formData.profissional_id.trim();
     const duracao = Number(formData.duracao_minutos);
 
-    if (
-      !Number.isInteger(pacienteId) ||
-      pacienteId <= 0 ||
-      !Number.isInteger(profissionalId) ||
-      profissionalId <= 0
-    ) {
-      showToast("Informe IDs válidos para paciente e profissional.");
+    if (!UUID_REGEX.test(pacienteId) || !UUID_REGEX.test(profissionalId)) {
+      showToast("Selecione ou informe UUIDs válidos para paciente e profissional.");
       return;
     }
 
@@ -355,20 +355,36 @@ export default function Agenda() {
       return;
     }
 
+    const linkLimpo = formData.link_teleconsulta.trim();
+    if (
+      formData.modalidade === "teleconsulta" &&
+      linkLimpo &&
+      !(linkLimpo.startsWith("https://") || linkLimpo.startsWith("http://"))
+    ) {
+      showToast("O link da teleconsulta deve começar com http:// ou https://.");
+      return;
+    }
+
     setSaving(true);
 
     try {
+      const payload = {
+        paciente_id: pacienteId,
+        profissional_id: profissionalId,
+        data_hora: dataHora.toISOString(),
+        duracao_minutos: duracao,
+        modalidade: formData.modalidade,
+        ...(formData.modalidade === "teleconsulta" && linkLimpo
+          ? { link_teleconsulta: linkLimpo }
+          : {}),
+      };
+
       const response = await fetchComSessao(`${API_URL}/agendamentos`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          paciente_id: pacienteId,
-          profissional_id: profissionalId,
-          data_hora: dataHora.toISOString(),
-          duracao_minutos: duracao,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json().catch(() => ({}));
@@ -390,11 +406,55 @@ export default function Agenda() {
       setAppointments((current) => [...current, data]);
       setShowForm(false);
       setFormData({ ...initialFormData });
-      showToast("Consulta agendada com sucesso!");
+      showToast(
+        data.modalidade === "teleconsulta"
+          ? "Teleconsulta agendada com sucesso!"
+          : "Consulta agendada com sucesso!"
+      );
     } catch (err) {
       showToast(err.message || "Erro ao cadastrar o agendamento.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSalvarLinkTeleconsulta(appointment) {
+    const url = linkDraft.trim();
+    if (!(url.startsWith("https://") || url.startsWith("http://"))) {
+      showToast("Informe uma URL válida começando com https://");
+      return;
+    }
+
+    setBusyActionId(appointment.id);
+    try {
+      const response = await fetchComSessao(
+        `${API_URL}/agendamentos/${appointment.id}/teleconsulta`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ link_teleconsulta: url }),
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          typeof data.detail === "string"
+            ? data.detail
+            : "Não foi possível salvar o link da teleconsulta."
+        );
+      }
+
+      setAppointments((current) =>
+        current.map((item) => (item.id === appointment.id ? data : item))
+      );
+      setEditingLinkId(null);
+      setLinkDraft("");
+      showToast("Link da teleconsulta salvo!");
+    } catch (err) {
+      showToast(err.message || "Erro ao salvar link da teleconsulta.");
+    } finally {
+      setBusyActionId(null);
     }
   }
 
@@ -409,7 +469,10 @@ export default function Agenda() {
       );
 
       if (!response.ok) {
-        throw new Error("Não foi possível cancelar a consulta.");
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(
+          errData.detail || "Não foi possível cancelar a consulta."
+        );
       }
 
       const atualizado = await response.json();
@@ -418,16 +481,6 @@ export default function Agenda() {
           item.id === appointment.id ? atualizado : item
         )
       );
-      setConcluidosIds((prev) => {
-        const next = prev.filter((id) => id !== appointment.id);
-        salvarListaLocal(CHAVE_CONCLUIDOS_LOCAL, next);
-        return next;
-      });
-      setRetomadosIds((prev) => {
-        const next = prev.filter((id) => id !== appointment.id);
-        salvarListaLocal(CHAVE_RETOMADOS_LOCAL, next);
-        return next;
-      });
       showToast("Consulta cancelada.");
     } catch (err) {
       showToast(err.message || "Erro ao cancelar a consulta.");
@@ -446,64 +499,60 @@ export default function Agenda() {
         { method: "PATCH" }
       );
 
-      if (response.ok) {
-        const atualizado = await response.json();
-        setAppointments((current) =>
-          current.map((item) =>
-            item.id === appointment.id ? atualizado : item
-          )
-        );
-      } else {
-        setAppointments((current) =>
-          current.map((item) =>
-            item.id === appointment.id ? { ...item, status: "agendado" } : item
-          )
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(
+          errData.detail || "Não foi possível reativar a consulta."
         );
       }
 
-      setRetomadosIds((prev) => {
-        if (prev.includes(appointment.id)) return prev;
-        const next = [...prev, appointment.id];
-        salvarListaLocal(CHAVE_RETOMADOS_LOCAL, next);
-        return next;
-      });
+      const atualizado = await response.json();
+      setAppointments((current) =>
+        current.map((item) =>
+          item.id === appointment.id ? atualizado : item
+        )
+      );
       showToast(
         `Consulta de ${appointment.pacienteInfo.nome} retomada para a programação.`
       );
-    } catch {
-      setRetomadosIds((prev) => {
-        if (prev.includes(appointment.id)) return prev;
-        const next = [...prev, appointment.id];
-        salvarListaLocal(CHAVE_RETOMADOS_LOCAL, next);
-        return next;
-      });
-      showToast(
-        `Consulta de ${appointment.pacienteInfo.nome} retomada para a programação.`
-      );
+    } catch (err) {
+      showToast(err.message || "Erro ao reativar a consulta.");
     } finally {
       setBusyActionId(null);
     }
   }
 
-  function handleConcluirConsulta(appointment) {
-    setConcluidosIds((prev) => {
-      if (prev.includes(appointment.id)) return prev;
-      const next = [...prev, appointment.id];
-      salvarListaLocal(CHAVE_CONCLUIDOS_LOCAL, next);
-      return next;
-    });
-    showToast(
-      `Atendimento de ${appointment.pacienteInfo.nome} marcado como concluído.`
-    );
-  }
+  async function handleConcluirConsulta(appointment) {
+    if (busyActionId === appointment.id) return;
+    setBusyActionId(appointment.id);
 
-  function handleReabrirConsulta(appointment) {
-    setConcluidosIds((prev) => {
-      const next = prev.filter((id) => id !== appointment.id);
-      salvarListaLocal(CHAVE_CONCLUIDOS_LOCAL, next);
-      return next;
-    });
-    showToast("Atendimento retornado para os próximos atendimentos.");
+    try {
+      const response = await fetchComSessao(
+        `${API_URL}/agendamentos/${appointment.id}/concluir`,
+        { method: "PATCH" }
+      );
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(
+          errData.detail || "Não foi possível concluir a consulta."
+        );
+      }
+
+      const atualizado = await response.json();
+      setAppointments((current) =>
+        current.map((item) =>
+          item.id === appointment.id ? atualizado : item
+        )
+      );
+      showToast(
+        `Atendimento de ${appointment.pacienteInfo.nome} marcado como concluído.`
+      );
+    } catch (err) {
+      showToast(err.message || "Erro ao concluir o atendimento.");
+    } finally {
+      setBusyActionId(null);
+    }
   }
 
   function iniciarConsulta(pacienteId) {
@@ -535,7 +584,7 @@ export default function Agenda() {
             </span>
             <div>
               <strong>Agendar consulta</strong>
-              <small>Marque um novo horário ou encaixe clínico</small>
+              <small>Marque atendimento presencial ou teleconsulta</small>
             </div>
           </div>
 
@@ -649,7 +698,7 @@ export default function Agenda() {
         {showForm && (
           <Card
             title="Agendar nova consulta"
-            description="Informe o paciente, data e horário do atendimento."
+            description="Selecione o paciente, profissional, modalidade e horário."
           >
             <form
               className="doctor-new-appointment-form"
@@ -658,17 +707,69 @@ export default function Agenda() {
               <div className="patient-grid patient-grid-personal">
                 <label className="patient-field">
                   <span>Paciente</span>
+                  {pacientesLista.length > 0 ? (
+                    <select
+                      name="paciente_id"
+                      value={formData.paciente_id}
+                      onChange={handleFormChange}
+                      required
+                    >
+                      <option value="">Selecione o paciente...</option>
+                      {pacientesLista.map((pac) => (
+                        <option key={pac.id} value={pac.id}>
+                          {pac.nome} ({resumirUuid(pac.id)})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      name="paciente_id"
+                      placeholder="UUID do paciente"
+                      value={formData.paciente_id}
+                      onChange={handleFormChange}
+                      required
+                    />
+                  )}
+                </label>
+
+                <label className="patient-field">
+                  <span>Profissional</span>
+                  {profissionaisLista.length > 0 ? (
+                    <select
+                      name="profissional_id"
+                      value={formData.profissional_id}
+                      onChange={handleFormChange}
+                      required
+                    >
+                      <option value="">Selecione o profissional...</option>
+                      {profissionaisLista.map((prof) => (
+                        <option key={prof.id} value={prof.id}>
+                          {prof.nome}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      name="profissional_id"
+                      placeholder="UUID do profissional"
+                      value={formData.profissional_id}
+                      onChange={handleFormChange}
+                      required
+                    />
+                  )}
+                </label>
+
+                <label className="patient-field">
+                  <span>Modalidade</span>
                   <select
-                    name="paciente_id"
-                    value={formData.paciente_id}
+                    name="modalidade"
+                    value={formData.modalidade}
                     onChange={handleFormChange}
-                    required
                   >
-                    <option value="">Selecione...</option>
-                    <option value="1">Ana Beatriz Lima (#1)</option>
-                    <option value="2">Pedro Henrique Costa (#2)</option>
-                    <option value="3">João Silva (#3)</option>
-                    <option value="4">Mariana Oliveira (#4)</option>
+                    <option value="presencial">Presencial</option>
+                    <option value="teleconsulta">Teleconsulta (Online)</option>
                   </select>
                 </label>
 
@@ -708,6 +809,19 @@ export default function Agenda() {
                     <option value="60">60 minutos</option>
                   </select>
                 </label>
+
+                {formData.modalidade === "teleconsulta" && (
+                  <label className="patient-field" style={{ gridColumn: "1 / -1" }}>
+                    <span>Link da sala virtual (Google Meet / videoconferência — opcional agora)</span>
+                    <input
+                      type="url"
+                      name="link_teleconsulta"
+                      placeholder="https://meet.google.com/xxx-xxxx-xxx"
+                      value={formData.link_teleconsulta}
+                      onChange={handleFormChange}
+                    />
+                  </label>
+                )}
               </div>
 
               <div className="patient-form-footer">
@@ -737,7 +851,7 @@ export default function Agenda() {
               <div>
                 <h2 className="card-title">Programação de Pacientes</h2>
                 <p className="doctor-schedule-subtitle">
-                  Pacientes agendados para atendimento clínico
+                  Pacientes agendados para atendimento presencial e teleconsulta
                 </p>
               </div>
 
@@ -773,7 +887,7 @@ export default function Agenda() {
                 <input
                   type="search"
                   aria-label="Buscar paciente na programação"
-                  placeholder="Buscar paciente ou especialidade..."
+                  placeholder="Buscar paciente, modalidade ou especialidade..."
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                 />
@@ -817,7 +931,7 @@ export default function Agenda() {
           ) : (
             <div className="doctor-patient-stack">
               {visibleAppointments.map((appointment, index) => {
-                const { statusInfo, pacienteInfo } = appointment;
+                const { statusInfo, pacienteInfo, isTeleconsulta } = appointment;
                 const colorClasses = ["lavender", "mint", "peach", "blue"];
                 const isPending =
                   statusInfo.key === "confirmed" ||
@@ -873,20 +987,90 @@ export default function Agenda() {
                           </span>
                           <span
                             className={`patient-record-badge ${
-                              pacienteInfo.modalidade === "Teleconsulta"
+                              isTeleconsulta
                                 ? "patient-record-badge-remote"
                                 : "patient-record-badge-presential"
                             }`}
                           >
-                            {pacienteInfo.modalidade}
+                            {pacienteInfo.modalidadeLabel}
                           </span>
+                          {pacienteInfo.profissionalNome && (
+                            <span className="patient-record-badge">
+                              Dr(a). {pacienteInfo.profissionalNome}
+                            </span>
+                          )}
                         </div>
+
+                        {isTeleconsulta && editingLinkId === appointment.id && (
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: "8px",
+                              marginTop: "8px",
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <input
+                              type="url"
+                              placeholder="https://meet.google.com/xxx-xxxx-xxx"
+                              value={linkDraft}
+                              onChange={(e) => setLinkDraft(e.target.value)}
+                              style={{ flex: 1, minWidth: "220px" }}
+                            />
+                            <Btn
+                              size="sm"
+                              disabled={busyActionId === appointment.id}
+                              onClick={() =>
+                                handleSalvarLinkTeleconsulta(appointment)
+                              }
+                            >
+                              Salvar link
+                            </Btn>
+                            <Btn
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => {
+                                setEditingLinkId(null);
+                                setLinkDraft("");
+                              }}
+                            >
+                              Cancelar
+                            </Btn>
+                          </div>
+                        )}
                       </div>
                     </div>
 
                     <div className="doctor-patient-actions">
                       {isPending && (
                         <>
+                          {isTeleconsulta && appointment.link_teleconsulta && (
+                            <a
+                              href={appointment.link_teleconsulta}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="doctor-action-btn"
+                              title="Abrir sala virtual de teleconsulta"
+                            >
+                              📹 Entrar na sala
+                            </a>
+                          )}
+
+                          {isTeleconsulta && editingLinkId !== appointment.id && (
+                            <button
+                              type="button"
+                              className="doctor-action-btn"
+                              onClick={() => {
+                                setEditingLinkId(appointment.id);
+                                setLinkDraft(appointment.link_teleconsulta || "");
+                              }}
+                              title="Configurar URL do Google Meet"
+                            >
+                              🔗 {appointment.link_teleconsulta ? "Editar link" : "Adicionar link"}
+                            </button>
+                          )}
+
                           <Btn
                             size="sm"
                             onClick={() =>
@@ -899,6 +1083,7 @@ export default function Agenda() {
                           <button
                             type="button"
                             className="doctor-action-btn doctor-action-complete"
+                            disabled={busyActionId === appointment.id}
                             onClick={() =>
                               handleConcluirConsulta(appointment)
                             }
@@ -922,26 +1107,15 @@ export default function Agenda() {
                       )}
 
                       {isCompleted && (
-                        <>
-                          <Btn
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              iniciarConsulta(appointment.paciente_id)
-                            }
-                          >
-                            Abrir prontuário →
-                          </Btn>
-                          <button
-                            type="button"
-                            className="doctor-action-btn doctor-action-reopen"
-                            onClick={() =>
-                              handleReabrirConsulta(appointment)
-                            }
-                          >
-                            ↺ Reabrir
-                          </button>
-                        </>
+                        <Btn
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            iniciarConsulta(appointment.paciente_id)
+                          }
+                        >
+                          Abrir prontuário →
+                        </Btn>
                       )}
 
                       {isCancelled && (

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, status
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,11 +12,12 @@ from src.infrastructure.database.connection import get_db
 from src.models import AgendamentoDB
 
 StatusAgendamento = Literal["agendado", "aguardando", "concluido", "cancelado"]
+ModalidadeAgendamento = Literal["presencial", "teleconsulta"]
 
 app = FastAPI(
     title="Microsserviço de Agendamentos",
-    description="API para gerenciar os agendamentos da clínica.",
-    version="0.2.0",
+    description="API para gerenciar os agendamentos presenciais e teleconsultas da clínica.",
+    version="0.3.0",
 )
 
 
@@ -28,16 +29,40 @@ def _validar_data_futura(valor: datetime) -> datetime:
     return valor
 
 
+def _validar_url_teleconsulta(valor: str | None) -> str | None:
+    if valor is None:
+        return None
+    limpo = valor.strip()
+    if not limpo:
+        return None
+    if not (limpo.startswith("https://") or limpo.startswith("http://")):
+        raise ValueError("O link da teleconsulta deve começar com http:// ou https://.")
+    return limpo
+
+
 class AgendamentoCreate(BaseModel):
     paciente_id: uuid.UUID
     profissional_id: uuid.UUID
     data_hora: datetime
     duracao_minutos: int = Field(default=30, gt=0, le=480)
+    modalidade: ModalidadeAgendamento = "presencial"
+    link_teleconsulta: str | None = Field(default=None, max_length=500)
 
     @field_validator("data_hora")
     @classmethod
     def validar_data_hora(cls, valor: datetime) -> datetime:
         return _validar_data_futura(valor)
+
+    @field_validator("link_teleconsulta")
+    @classmethod
+    def validar_link(cls, valor: str | None) -> str | None:
+        return _validar_url_teleconsulta(valor)
+
+    @model_validator(mode="after")
+    def validar_consistencia_modalidade(self):
+        if self.modalidade == "presencial" and self.link_teleconsulta:
+            raise ValueError("Consultas presenciais não devem possuir link de teleconsulta.")
+        return self
 
 
 class AgendamentoRemarcar(BaseModel):
@@ -50,6 +75,18 @@ class AgendamentoRemarcar(BaseModel):
         return _validar_data_futura(valor)
 
 
+class TeleconsultaLinkUpdate(BaseModel):
+    link_teleconsulta: str = Field(..., min_length=8, max_length=500)
+
+    @field_validator("link_teleconsulta")
+    @classmethod
+    def validar_link(cls, valor: str) -> str:
+        validado = _validar_url_teleconsulta(valor)
+        if not validado:
+            raise ValueError("Informe uma URL válida para a teleconsulta.")
+        return validado
+
+
 class Agendamento(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -58,6 +95,8 @@ class Agendamento(BaseModel):
     profissional_id: uuid.UUID
     data_hora: datetime
     duracao_minutos: int
+    modalidade: ModalidadeAgendamento = "presencial"
+    link_teleconsulta: str | None = None
     status: StatusAgendamento = "agendado"
 
 
@@ -188,6 +227,43 @@ async def buscar_agendamento(
         raise HTTPException(status_code=404, detail="Agendamento não encontrado.")
 
     _verificar_acesso_agendamento(agendamento, usuario)
+    return agendamento
+
+
+@app.patch("/agendamentos/{agendamento_id}/teleconsulta", response_model=Agendamento)
+async def registrar_link_teleconsulta(
+    agendamento_id: uuid.UUID,
+    dados: TeleconsultaLinkUpdate,
+    db: AsyncSession = Depends(get_db),
+    usuario: UsuarioAutenticado = Depends(get_current_user),
+):
+    if usuario.perfil == "PACIENTE":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas profissionais ou equipe da clínica podem registrar o link da teleconsulta.",
+        )
+
+    agendamento = await db.get(AgendamentoDB, agendamento_id)
+    if agendamento is None:
+        raise HTTPException(status_code=404, detail="Agendamento não encontrado.")
+
+    _verificar_acesso_agendamento(agendamento, usuario)
+
+    if agendamento.modalidade != "teleconsulta":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Este agendamento é presencial e não aceita link de teleconsulta.",
+        )
+
+    if agendamento.status in ("cancelado", "concluido"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Não é possível alterar link de agendamento '{agendamento.status}'.",
+        )
+
+    agendamento.link_teleconsulta = dados.link_teleconsulta
+    await db.commit()
+    await db.refresh(agendamento)
     return agendamento
 
 

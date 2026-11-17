@@ -1,9 +1,24 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { useToast } from "../components/ToastProvider.jsx";
 import Card from "../components/Card.jsx";
 import Btn from "../components/Btn.jsx";
-import { useNavigate } from "react-router-dom";
+import {
+  garantirSessaoValida,
+  lerPayload,
+  obterToken,
+  removerToken,
+} from "../utils/auth.js";
+
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:8000"
+).replace(/\/$/, "");
+
+const MESES_CURTOS = [
+  "JAN", "FEV", "MAR", "ABR", "MAI", "JUN",
+  "JUL", "AGO", "SET", "OUT", "NOV", "DEZ",
+];
 
 const initialExercises = [
   {
@@ -26,11 +41,131 @@ const initialExercises = [
   },
 ];
 
+async function fetchComSessao(url, options = {}) {
+  let token = obterToken() || (await garantirSessaoValida());
+  const montarHeaders = (t) => ({
+    ...(options.headers || {}),
+    ...(t ? { Authorization: `Bearer ${t}` } : {}),
+  });
+
+  let response = await fetch(url, {
+    ...options,
+    headers: montarHeaders(token),
+  });
+
+  if (response.status === 401) {
+    removerToken();
+    token = await garantirSessaoValida();
+    if (token) {
+      response = await fetch(url, {
+        ...options,
+        headers: montarHeaders(token),
+      });
+    }
+  }
+
+  return response;
+}
+
+function formatarHora(iso) {
+  if (!iso) return "--:--";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "--:--";
+  return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatarDataCompleta(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
 export default function Portal() {
   const [completedExercises, setCompletedExercises] = useState([]);
   const [checkedIn, setCheckedIn] = useState(false);
+  const [agendamentos, setAgendamentos] = useState([]);
+  const [carregandoAgenda, setCarregandoAgenda] = useState(true);
+  const [cancelandoId, setCancelandoId] = useState(null);
   const { showToast } = useToast();
   const navigate = useNavigate();
+
+  const nomeUsuario = useMemo(() => {
+    const token = obterToken();
+    const payload = token ? lerPayload(token) : null;
+    if (payload?.nome) return String(payload.nome).split(" ")[0];
+    if (payload?.email) return String(payload.email).split("@")[0];
+    return "Paciente";
+  }, []);
+
+  async function carregarConsultas() {
+    setCarregandoAgenda(true);
+    try {
+      const resp = await fetchComSessao(`${API_URL}/agendamentos`);
+      if (resp.ok) {
+        const dados = await resp.json();
+        setAgendamentos(Array.isArray(dados) ? dados : []);
+      }
+    } catch {
+      /* mantém lista vazia se offline */
+    } finally {
+      setCarregandoAgenda(false);
+    }
+  }
+
+  useEffect(() => {
+    carregarConsultas();
+  }, []);
+
+  const proximasConsultas = useMemo(() => {
+    return agendamentos.filter(
+      (a) => a.status === "agendado" || a.status === "aguardando"
+    );
+  }, [agendamentos]);
+
+  const proximaConsulta = proximasConsultas[0] || null;
+
+  const infoDataProxima = useMemo(() => {
+    if (!proximaConsulta?.data_hora) return null;
+    const d = new Date(proximaConsulta.data_hora);
+    if (Number.isNaN(d.getTime())) return null;
+    return {
+      mes: MESES_CURTOS[d.getMonth()],
+      dia: String(d.getDate()).padStart(2, "0"),
+      hora: formatarHora(proximaConsulta.data_hora),
+      dataCompleta: formatarDataCompleta(proximaConsulta.data_hora),
+    };
+  }, [proximaConsulta]);
+
+  async function handleCancelarConsulta(consulta) {
+    if (cancelandoId === consulta.id) return;
+    setCancelandoId(consulta.id);
+    try {
+      const resp = await fetchComSessao(
+        `${API_URL}/agendamentos/${consulta.id}/cancelar`,
+        { method: "PATCH" }
+      );
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        throw new Error(
+          errData.detail || "Não foi possível cancelar o agendamento."
+        );
+      }
+      const atualizado = await resp.json();
+      setAgendamentos((prev) =>
+        prev.map((item) => (item.id === consulta.id ? atualizado : item))
+      );
+      showToast("Consulta cancelada com sucesso.");
+    } catch (err) {
+      showToast(err.message || "Erro ao cancelar consulta.");
+    } finally {
+      setCancelandoId(null);
+    }
+  }
 
   const completedCount = completedExercises.length;
 
@@ -67,11 +202,11 @@ export default function Portal() {
           <span className="eyebrow">SEU ESPAÇO DE CUIDADO</span>
 
           <h2>
-            Olá, João <span aria-hidden="true">👋</span>
+            Olá, {nomeUsuario} <span aria-hidden="true">👋</span>
           </h2>
 
           <p>
-            Cada pequena prática conta. Acompanhe sua evolução e mantenha
+            Cada pequena prática conta. Acompanhe suas consultas e mantenha
             a regularidade do tratamento.
           </p>
         </div>
@@ -157,11 +292,31 @@ export default function Portal() {
             </span>
           </div>
 
-          <div className="next-appointment-time">14:00</div>
+          <div className="next-appointment-time">
+            {carregandoAgenda
+              ? "..."
+              : infoDataProxima
+                ? infoDataProxima.hora
+                : "--:--"}
+          </div>
 
-          <strong className="next-appointment-date">Próximo atendimento</strong>
+          <strong className="next-appointment-date">
+            {carregandoAgenda
+              ? "Carregando agenda..."
+              : infoDataProxima
+                ? `${infoDataProxima.dataCompleta} · ${
+                    proximaConsulta.modalidade === "teleconsulta"
+                      ? "Teleconsulta"
+                      : "Presencial"
+                  }`
+                : "Nenhuma consulta agendada"}
+          </strong>
 
-          <p>Horário fictício para demonstração.</p>
+          <p>
+            {proximasConsultas.length > 0
+              ? `${proximasConsultas.length} agendamento(s) ativo(s).`
+              : "Sem atendimentos futuros programados."}
+          </p>
         </div>
       </section>
 
@@ -244,32 +399,71 @@ export default function Portal() {
         <div className="patient-side-stack">
           <Card
             title="Seu próximo atendimento"
-            description="Informações da consulta demonstrativa"
+            description={
+              proximaConsulta
+                ? "Dados sincronizados com o serviço de agendamento"
+                : "Você não possui consultas pendentes no momento"
+            }
           >
-            <div className="patient-appointment">
-              <div className="patient-appointment-date">
-                <span>OUT</span>
-                <strong>20</strong>
-              </div>
+            {carregandoAgenda ? (
+              <p>Carregando consultas...</p>
+            ) : proximaConsulta && infoDataProxima ? (
+              <>
+                <div className="patient-appointment">
+                  <div className="patient-appointment-date">
+                    <span>{infoDataProxima.mes}</span>
+                    <strong>{infoDataProxima.dia}</strong>
+                  </div>
 
-              <div className="patient-appointment-info">
-                <strong>Acompanhamento clínico</strong>
-                <span>14:00 · Horário ilustrativo</span>
-                <span>Profissional de saúde</span>
-              </div>
-            </div>
+                  <div className="patient-appointment-info">
+                    <strong>
+                      {proximaConsulta.modalidade === "teleconsulta"
+                        ? "Teleconsulta Online"
+                        : "Consulta Presencial"}
+                    </strong>
+                    <span>
+                      {infoDataProxima.hora} · {proximaConsulta.duracao_minutos} min
+                    </span>
+                    <span>Status: {proximaConsulta.status}</span>
+                  </div>
+                </div>
 
-            <div className="appointment-divider" />
+                {proximaConsulta.modalidade === "teleconsulta" && (
+                  <div style={{ marginTop: "12px" }}>
+                    {proximaConsulta.link_teleconsulta ? (
+                      <a
+                        href={proximaConsulta.link_teleconsulta}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn-primary btn-block"
+                      >
+                        📹 Entrar na Teleconsulta
+                      </a>
+                    ) : (
+                      <p role="status">
+                        A sala virtual ainda não foi disponibilizada pelo profissional.
+                      </p>
+                    )}
+                  </div>
+                )}
 
-            <button
-              type="button"
-              className="patient-text-action"
-              onClick={() =>
-                showToast("O reagendamento será integrado ao serviço de agenda.")
-              }
-            >
-              Solicitar reagendamento <span aria-hidden="true">→</span>
-            </button>
+                <div className="appointment-divider" />
+
+                <button
+                  type="button"
+                  className="patient-text-action"
+                  disabled={cancelandoId === proximaConsulta.id}
+                  onClick={() => handleCancelarConsulta(proximaConsulta)}
+                >
+                  {cancelandoId === proximaConsulta.id
+                    ? "Cancelando..."
+                    : "Cancelar consulta"}{" "}
+                  <span aria-hidden="true">✕</span>
+                </button>
+              </>
+            ) : (
+              <p>Nenhum agendamento ativo encontrado para sua conta.</p>
+            )}
           </Card>
 
           <Card title="Uma mensagem para você">
@@ -287,12 +481,10 @@ export default function Portal() {
             <div className="patient-shortcuts">
               <button
                 type="button"
-                onClick={() =>
-                  showToast("O histórico clínico será conectado ao backend.")
-                }
+                onClick={() => carregarConsultas()}
               >
-                <span>▤</span>
-                <strong>Meu histórico</strong>
+                <span>↻</span>
+                <strong>Atualizar consultas</strong>
                 <span aria-hidden="true">→</span>
               </button>
 
