@@ -162,3 +162,28 @@ async def cancelar_agendamento(
     await db.refresh(agendamento)
 
     return agendamento
+
+
+# Retomar / reativar agendamento cancelado
+@app.patch(
+    "/agendamentos/{agendamento_id}/reativar",
+    response_model=Agendamento,
+)
+async def reativar_agendamento(
+    agendamento_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    agendamento = await db.get(AgendamentoDB, agendamento_id)
+
+    if agendamento is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Agendamento não encontrado.",
+        )
+
+    agendamento.status = "agendado"
+
+    await db.commit()
+    await db.refresh(agendamento)
+
+    return agendamento

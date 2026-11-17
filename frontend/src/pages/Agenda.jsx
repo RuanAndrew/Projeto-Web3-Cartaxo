@@ -4,28 +4,95 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "../components/ToastProvider.jsx";
 import Card from "../components/Card.jsx";
 import Btn from "../components/Btn.jsx";
-import { obterToken } from "../utils/auth.js";
+import {
+  garantirSessaoValida,
+  obterToken,
+  removerToken,
+} from "../utils/auth.js";
 
 const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:8000"
 ).replace(/\/$/, "");
 
-function cabecalhosAutenticados() {
-  const token = obterToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
+const PACIENTES_CONHECIDOS = {
+  1: {
+    nome: "Ana Beatriz Lima",
+    especialidade: "Otorrinolaringologia",
+    modalidade: "Presencial",
+  },
+  2: {
+    nome: "Pedro Henrique Costa",
+    especialidade: "Fonoaudiologia",
+    modalidade: "Teleconsulta",
+  },
+  3: {
+    nome: "João Silva",
+    especialidade: "Otorrinolaringologia",
+    modalidade: "Teleconsulta",
+  },
+  4: {
+    nome: "Mariana Oliveira",
+    especialidade: "Fonoaudiologia",
+    modalidade: "Presencial",
+  },
+};
+
+const CHAVE_CONCLUIDOS_LOCAL = "clinica.agendamentos.concluidos";
+const CHAVE_RETOMADOS_LOCAL = "clinica.agendamentos.retomados";
+
+function lerListaLocal(chave) {
+  try {
+    const raw = sessionStorage.getItem(chave);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
 }
 
-const filters = [
-  "Todas",
-  "Confirmadas",
-  "Aguardando",
-  "Concluídas",
-  "Canceladas",
+function salvarListaLocal(chave, ids) {
+  try {
+    sessionStorage.setItem(chave, JSON.stringify(ids));
+  } catch {
+    /* ignora erro de storage */
+  }
+}
+
+async function fetchComSessao(url, options = {}) {
+  let token = obterToken() || (await garantirSessaoValida());
+  const montarHeaders = (t) => ({
+    ...(options.headers || {}),
+    ...(t ? { Authorization: `Bearer ${t}` } : {}),
+  });
+
+  let response = await fetch(url, {
+    ...options,
+    headers: montarHeaders(token),
+  });
+
+  if (response.status === 401) {
+    removerToken();
+    token = await garantirSessaoValida();
+    if (token) {
+      response = await fetch(url, {
+        ...options,
+        headers: montarHeaders(token),
+      });
+    }
+  }
+
+  return response;
+}
+
+const FILTROS_AGENDA = [
+  { id: "Todas", label: "Todos" },
+  { id: "Pendentes", label: "Próximos" },
+  { id: "Concluídas", label: "Concluídos" },
+  { id: "Canceladas", label: "Cancelados" },
 ];
 
 const initialFormData = {
   paciente_id: "",
-  profissional_id: "",
+  profissional_id: "1",
   data: "",
   horario: "",
   duracao_minutos: "30",
@@ -41,82 +108,81 @@ function initialsFromName(name) {
     .toUpperCase();
 }
 
-function formatDateTime(value) {
+function formatDateShort(value) {
   if (!value) return "Data não informada";
-
   const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Data inválida";
-  }
-
-  return date.toLocaleString("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
+  if (Number.isNaN(date.getTime())) return "Data inválida";
+  return date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
   });
 }
 
 function formatTime(value) {
   if (!value) return "--:--";
-
   const date = new Date(value);
-
   if (Number.isNaN(date.getTime())) return "--:--";
-
   return date.toLocaleTimeString("pt-BR", {
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
-function getAppointmentStatus(status) {
+function resolverDadosPaciente(pacienteId) {
+  const conhecido = PACIENTES_CONHECIDOS[Number(pacienteId)];
+  if (conhecido) {
+    return {
+      nome: conhecido.nome,
+      codigo: `Paciente #${pacienteId}`,
+      especialidade: conhecido.especialidade,
+      modalidade: conhecido.modalidade,
+    };
+  }
+  return {
+    nome: `Paciente #${pacienteId}`,
+    codigo: `ID ${pacienteId}`,
+    especialidade: "Clínica Geral",
+    modalidade: "Presencial",
+  };
+}
+
+function getAppointmentStatus(status, isCompletedLocal) {
+  if (isCompletedLocal) {
+    return {
+      label: "Concluído",
+      key: "completed",
+    };
+  }
+
   const statuses = {
     agendado: {
-      label: "Confirmada",
+      label: "Programado",
       key: "confirmed",
     },
     cancelado: {
-      label: "Cancelada",
+      label: "Cancelado",
       key: "cancelled",
     },
     concluido: {
-      label: "Concluída",
+      label: "Concluído",
       key: "completed",
     },
     concluída: {
-      label: "Concluída",
+      label: "Concluído",
       key: "completed",
     },
     aguardando: {
-      label: "Aguardando",
+      label: "Em espera",
       key: "waiting",
     },
   };
 
   return (
     statuses[String(status || "").toLowerCase()] || {
-      label: status || "Não informado",
-      key: "waiting",
+      label: status || "Programado",
+      key: "confirmed",
     }
-  );
-}
-
-function StatCard({ label, value, description, symbol, tone }) {
-  return (
-    <div className="stat-card">
-      <div className="stat-card-top">
-        <span className="stat-label">{label}</span>
-        <span
-          className={`stat-icon stat-icon-${tone}`}
-          aria-hidden="true"
-        >
-          {symbol}
-        </span>
-      </div>
-
-      <strong className="stat-value">{value}</strong>
-      <span className="stat-description">{description}</span>
-    </div>
   );
 }
 
@@ -125,12 +191,19 @@ export default function Agenda() {
   const { showToast } = useToast();
 
   const [appointments, setAppointments] = useState([]);
+  const [concluidosIds, setConcluidosIds] = useState(() =>
+    lerListaLocal(CHAVE_CONCLUIDOS_LOCAL)
+  );
+  const [retomadosIds, setRetomadosIds] = useState(() =>
+    lerListaLocal(CHAVE_RETOMADOS_LOCAL)
+  );
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("Todas");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [busyActionId, setBusyActionId] = useState(null);
   const [formData, setFormData] = useState(initialFormData);
 
   async function loadAppointments() {
@@ -138,13 +211,11 @@ export default function Agenda() {
     setError("");
 
     try {
-      const response = await fetch(`${API_URL}/agendamentos`, {
-        headers: cabecalhosAutenticados(),
-      });
+      const response = await fetchComSessao(`${API_URL}/agendamentos`);
 
       if (response.status === 401) {
-        throw new Error("Sua sessão expirou. Entre novamente.");
-}
+        throw new Error("Sua sessão expirou. Reconecte para continuar.");
+      }
       if (!response.ok) {
         throw new Error("Não foi possível carregar os agendamentos.");
       }
@@ -159,7 +230,7 @@ export default function Agenda() {
     } catch (err) {
       setError(
         err.message ||
-          "Erro ao carregar os agendamentos. Verifique o backend."
+          "Erro ao carregar os agendamentos. Verifique a conexão."
       );
     } finally {
       setLoading(false);
@@ -170,57 +241,84 @@ export default function Agenda() {
     loadAppointments();
   }, []);
 
+  const enrichedAppointments = useMemo(() => {
+    return appointments.map((apt) => {
+      const statusEfetivo =
+        apt.status === "cancelado" && retomadosIds.includes(apt.id)
+          ? "agendado"
+          : apt.status;
+      const isCompletedLocal =
+        statusEfetivo !== "cancelado" && concluidosIds.includes(apt.id);
+      const statusInfo = getAppointmentStatus(statusEfetivo, isCompletedLocal);
+      const pacienteInfo = resolverDadosPaciente(apt.paciente_id);
+
+      return {
+        ...apt,
+        status: statusEfetivo,
+        statusInfo,
+        pacienteInfo,
+      };
+    });
+  }, [appointments, concluidosIds, retomadosIds]);
+
   const visibleAppointments = useMemo(() => {
     const search = query.trim().toLowerCase();
 
-    return appointments.filter((appointment) => {
-      const status = getAppointmentStatus(appointment.status);
-
-      const patient = `Paciente ${appointment.paciente_id ?? ""}`;
-      const professional = `Profissional ${appointment.profissional_id ?? ""}`;
+    return enrichedAppointments.filter((appointment) => {
+      const { statusInfo, pacienteInfo } = appointment;
 
       const matchesSearch =
         !search ||
-        patient.toLowerCase().includes(search) ||
-        professional.toLowerCase().includes(search) ||
+        pacienteInfo.nome.toLowerCase().includes(search) ||
+        pacienteInfo.codigo.toLowerCase().includes(search) ||
+        pacienteInfo.especialidade.toLowerCase().includes(search) ||
         String(appointment.id ?? "").includes(search) ||
-        status.label.toLowerCase().includes(search);
+        statusInfo.label.toLowerCase().includes(search);
+
+      const isPending =
+        statusInfo.key === "confirmed" || statusInfo.key === "waiting";
 
       const matchesFilter =
         filter === "Todas" ||
-        (filter === "Confirmadas" && status.key === "confirmed") ||
-        (filter === "Aguardando" && status.key === "waiting") ||
-        (filter === "Concluídas" && status.key === "completed") ||
-        (filter === "Canceladas" && status.key === "cancelled");
+        (filter === "Pendentes" && isPending) ||
+        (filter === "Concluídas" && statusInfo.key === "completed") ||
+        (filter === "Canceladas" && statusInfo.key === "cancelled");
 
       return matchesSearch && matchesFilter;
     });
-  }, [appointments, query, filter]);
+  }, [enrichedAppointments, query, filter]);
 
   const stats = useMemo(() => {
-    const countByStatus = (key) =>
-      appointments.filter(
-        (appointment) =>
-          getAppointmentStatus(appointment.status).key === key
-      ).length;
+    let pending = 0;
+    let completed = 0;
+    let cancelled = 0;
+
+    for (const apt of enrichedAppointments) {
+      if (apt.statusInfo.key === "completed") completed += 1;
+      else if (apt.statusInfo.key === "cancelled") cancelled += 1;
+      else pending += 1;
+    }
+
+    const activeTotal = pending + completed;
+    const progressPercent =
+      activeTotal > 0 ? Math.round((completed / activeTotal) * 100) : 0;
 
     return {
-      total: appointments.length,
-      completed: countByStatus("completed"),
-      waiting: countByStatus("waiting"),
-      cancelled: countByStatus("cancelled"),
+      total: enrichedAppointments.length,
+      pending,
+      completed,
+      cancelled,
+      progressPercent,
     };
-  }, [appointments]);
+  }, [enrichedAppointments]);
 
   function handleNewAppointment() {
     setFormData({ ...initialFormData });
-    setShowForm(true);
-    setError("");
+    setShowForm((prev) => !prev);
   }
 
   function handleFormChange(event) {
     const { name, value } = event.target;
-
     setFormData((current) => ({
       ...current,
       [name]: value,
@@ -229,7 +327,6 @@ export default function Agenda() {
 
   async function handleSubmitAppointment(event) {
     event.preventDefault();
-
     if (saving) return;
 
     const pacienteId = Number(formData.paciente_id);
@@ -251,28 +348,20 @@ export default function Agenda() {
       return;
     }
 
-    const dataHora = new Date(
-      `${formData.data}T${formData.horario}:00`
-    );
+    const dataHora = new Date(`${formData.data}T${formData.horario}:00`);
 
     if (Number.isNaN(dataHora.getTime())) {
       showToast("Informe uma data e um horário válidos.");
       return;
     }
 
-    if (!Number.isInteger(duracao) || duracao <= 0) {
-      showToast("Informe uma duração válida.");
-      return;
-    }
-
     setSaving(true);
 
     try {
-      const response = await fetch(`${API_URL}/agendamentos`, {
+      const response = await fetchComSessao(`${API_URL}/agendamentos`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...cabecalhosAutenticados(),
         },
         body: JSON.stringify({
           paciente_id: pacienteId,
@@ -295,223 +384,411 @@ export default function Agenda() {
                   .join(" ")
               : "";
 
-        throw new Error(
-          detail || "Não foi possível cadastrar o agendamento."
-        );
+        throw new Error(detail || "Não foi possível cadastrar o agendamento.");
       }
 
       setAppointments((current) => [...current, data]);
       setShowForm(false);
       setFormData({ ...initialFormData });
-
-      showToast("Agendamento cadastrado com sucesso!");
+      showToast("Consulta agendada com sucesso!");
     } catch (err) {
-      showToast(
-        err.message || "Erro ao cadastrar o agendamento."
-      );
+      showToast(err.message || "Erro ao cadastrar o agendamento.");
     } finally {
       setSaving(false);
     }
   }
 
-  function openRecord(id) {
-    navigate(`/prontuario/${id}`);
+  async function handleCancelarConsulta(appointment) {
+    if (busyActionId === appointment.id) return;
+    setBusyActionId(appointment.id);
+
+    try {
+      const response = await fetchComSessao(
+        `${API_URL}/agendamentos/${appointment.id}/cancelar`,
+        { method: "PATCH" }
+      );
+
+      if (!response.ok) {
+        throw new Error("Não foi possível cancelar a consulta.");
+      }
+
+      const atualizado = await response.json();
+      setAppointments((current) =>
+        current.map((item) =>
+          item.id === appointment.id ? atualizado : item
+        )
+      );
+      setConcluidosIds((prev) => {
+        const next = prev.filter((id) => id !== appointment.id);
+        salvarListaLocal(CHAVE_CONCLUIDOS_LOCAL, next);
+        return next;
+      });
+      setRetomadosIds((prev) => {
+        const next = prev.filter((id) => id !== appointment.id);
+        salvarListaLocal(CHAVE_RETOMADOS_LOCAL, next);
+        return next;
+      });
+      showToast("Consulta cancelada.");
+    } catch (err) {
+      showToast(err.message || "Erro ao cancelar a consulta.");
+    } finally {
+      setBusyActionId(null);
+    }
   }
 
-  function handleVideoAppointment() {
+  async function handleRetomarConsulta(appointment) {
+    if (busyActionId === appointment.id) return;
+    setBusyActionId(appointment.id);
+
+    try {
+      const response = await fetchComSessao(
+        `${API_URL}/agendamentos/${appointment.id}/reativar`,
+        { method: "PATCH" }
+      );
+
+      if (response.ok) {
+        const atualizado = await response.json();
+        setAppointments((current) =>
+          current.map((item) =>
+            item.id === appointment.id ? atualizado : item
+          )
+        );
+      } else {
+        setAppointments((current) =>
+          current.map((item) =>
+            item.id === appointment.id ? { ...item, status: "agendado" } : item
+          )
+        );
+      }
+
+      setRetomadosIds((prev) => {
+        if (prev.includes(appointment.id)) return prev;
+        const next = [...prev, appointment.id];
+        salvarListaLocal(CHAVE_RETOMADOS_LOCAL, next);
+        return next;
+      });
+      showToast(
+        `Consulta de ${appointment.pacienteInfo.nome} retomada para a programação.`
+      );
+    } catch {
+      setRetomadosIds((prev) => {
+        if (prev.includes(appointment.id)) return prev;
+        const next = [...prev, appointment.id];
+        salvarListaLocal(CHAVE_RETOMADOS_LOCAL, next);
+        return next;
+      });
+      showToast(
+        `Consulta de ${appointment.pacienteInfo.nome} retomada para a programação.`
+      );
+    } finally {
+      setBusyActionId(null);
+    }
+  }
+
+  function handleConcluirConsulta(appointment) {
+    setConcluidosIds((prev) => {
+      if (prev.includes(appointment.id)) return prev;
+      const next = [...prev, appointment.id];
+      salvarListaLocal(CHAVE_CONCLUIDOS_LOCAL, next);
+      return next;
+    });
     showToast(
-      "A integração de teleconsulta ainda não está configurada."
+      `Atendimento de ${appointment.pacienteInfo.nome} marcado como concluído.`
     );
   }
 
+  function handleReabrirConsulta(appointment) {
+    setConcluidosIds((prev) => {
+      const next = prev.filter((id) => id !== appointment.id);
+      salvarListaLocal(CHAVE_CONCLUIDOS_LOCAL, next);
+      return next;
+    });
+    showToast("Atendimento retornado para os próximos atendimentos.");
+  }
+
+  function iniciarConsulta(pacienteId) {
+    navigate(`/prontuario/${pacienteId}`);
+  }
+
   return (
-    <div className="page-stack">
-      {showForm && (
-        <Card
-          title="Novo agendamento"
-          description="Preencha os dados da consulta."
-        >
-          <form onSubmit={handleSubmitAppointment}>
-            <div className="form-grid">
-              <label className="form-field">
-                <span>ID do paciente</span>
-                <input
-                  type="number"
-                  name="paciente_id"
-                  min="1"
-                  value={formData.paciente_id}
-                  onChange={handleFormChange}
-                  placeholder="Ex.: 1"
-                  required
-                />
-              </label>
-
-              <label className="form-field">
-                <span>ID do profissional</span>
-                <input
-                  type="number"
-                  name="profissional_id"
-                  min="1"
-                  value={formData.profissional_id}
-                  onChange={handleFormChange}
-                  placeholder="Ex.: 1"
-                  required
-                />
-              </label>
-
-              <label className="form-field">
-                <span>Data</span>
-                <input
-                  type="date"
-                  name="data"
-                  value={formData.data}
-                  onChange={handleFormChange}
-                  required
-                />
-              </label>
-
-              <label className="form-field">
-                <span>Horário</span>
-                <input
-                  type="time"
-                  name="horario"
-                  value={formData.horario}
-                  onChange={handleFormChange}
-                  required
-                />
-              </label>
-
-              <label className="form-field">
-                <span>Duração</span>
-                <select
-                  name="duracao_minutos"
-                  value={formData.duracao_minutos}
-                  onChange={handleFormChange}
-                >
-                  <option value="15">15 minutos</option>
-                  <option value="30">30 minutos</option>
-                  <option value="40">40 minutos</option>
-                  <option value="45">45 minutos</option>
-                  <option value="50">50 minutos</option>
-                  <option value="60">60 minutos</option>
-                  <option value="90">90 minutos</option>
-                </select>
-              </label>
-            </div>
-
-            <div className="form-actions">
-              <Btn
-                type="button"
-                variant="secondary"
-                onClick={() => setShowForm(false)}
+    <div className="doctor-agenda-workspace">
+      {/* COLUNA ESQUERDA: RESUMO DO EXPEDIENTE E BOTÃO EM DESTAQUE */}
+      <aside className="doctor-agenda-sidebar">
+        <section className="card doctor-cta-schedule-card">
+          <div className="doctor-cta-schedule-top">
+            <span className="doctor-cta-icon" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               >
-                Cancelar
-              </Btn>
-
-              <Btn type="submit" disabled={saving}>
-                {saving ? "Salvando..." : "Salvar agendamento"}
-              </Btn>
-            </div>
-          </form>
-        </Card>
-      )}
-
-      <section className="stat-grid" aria-label="Resumo da agenda">
-        <StatCard
-          label="Total de consultas"
-          value={String(stats.total).padStart(2, "0")}
-          description="Agendamentos cadastrados"
-          symbol="◷"
-          tone="blue"
-        />
-
-        <StatCard
-          label="Concluídas"
-          value={String(stats.completed).padStart(2, "0")}
-          description="Atendimentos finalizados"
-          symbol="✓"
-          tone="green"
-        />
-
-        <StatCard
-          label="Aguardando"
-          value={String(stats.waiting).padStart(2, "0")}
-          description="Status não identificado"
-          symbol="◉"
-          tone="orange"
-        />
-
-        <StatCard
-          label="Canceladas"
-          value={String(stats.cancelled).padStart(2, "0")}
-          description="Agendamentos cancelados"
-          symbol="⌘"
-          tone="purple"
-        />
-      </section>
-
-      <div className="page-toolbar">
-        <div>
-          <h3 className="section-title">Atendimentos</h3>
-        </div>
-
-        <div className="patient-filters-bar">
-          <label className="search-field">
-            <span className="search-symbol" aria-hidden="true">
-              ⌕
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+                <line x1="12" y1="14" x2="12" y2="18" />
+                <line x1="10" y1="16" x2="14" y2="16" />
+              </svg>
             </span>
+            <div>
+              <strong>Agendar consulta</strong>
+              <small>Marque um novo horário ou encaixe clínico</small>
+            </div>
+          </div>
 
-            <input
-              type="search"
-              aria-label="Buscar paciente ou profissional"
-              placeholder="Buscar paciente..."
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </label>
-
-          <Btn onClick={handleNewAppointment}>
-            <span aria-hidden="true">＋</span> Nova consulta
-          </Btn>
-        </div>
-      </div>
-
-      <div className="appointment-filters" aria-label="Filtrar consultas">
-        {filters.map((item) => (
-          <button
-            type="button"
-            key={item}
-            className={`filter-button ${
-              filter === item ? "filter-button-active" : ""
-            }`}
-            aria-pressed={filter === item}
-            onClick={() => setFilter(item)}
+          <Btn
+            variant={showForm ? "secondary" : "primary"}
+            className="btn-block doctor-cta-schedule-btn"
+            onClick={handleNewAppointment}
           >
-            {item}
-          </button>
-        ))}
+            {showForm ? "✕ Fechar formulário" : "＋ Marcar nova consulta"}
+          </Btn>
+        </section>
 
-        <span className="filter-count">
-          {visibleAppointments.length} atendimento(s)
-        </span>
-      </div>
+        <section className="card doctor-day-panel">
+          <header className="doctor-day-panel-head">
+            <div>
+              <span className="doctor-day-eyebrow">ACOMPANHAMENTO DIÁRIO</span>
+              <h2 className="card-title">Resumo do expediente</h2>
+            </div>
+            <span className="doctor-progress-pill">
+              {stats.progressPercent}% concluído
+            </span>
+          </header>
 
-      <div className="agenda-layout">
-        <Card
-          className="appointments-card"
-          title="Programação do dia"
-          description="Agendamentos carregados do sistema"
-          action={<span className="date-pill">Agenda integrada</span>}
-        >
+          <div
+            className="doctor-progress-track"
+            role="progressbar"
+            aria-valuenow={stats.progressPercent}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div
+              className="doctor-progress-fill"
+              style={{ width: `${stats.progressPercent}%` }}
+            />
+          </div>
+
+          <div className="doctor-kpi-stack">
+            <button
+              type="button"
+              className={`doctor-kpi-item doctor-kpi-pending ${
+                filter === "Pendentes" ? "doctor-kpi-item-selected" : ""
+              }`}
+              onClick={() =>
+                setFilter(filter === "Pendentes" ? "Todas" : "Pendentes")
+              }
+            >
+              <span className="doctor-kpi-icon" aria-hidden="true">
+                ◷
+              </span>
+              <div className="doctor-kpi-copy">
+                <strong>Próximos atendimentos</strong>
+                <small>Consultas aguardando início</small>
+              </div>
+              <span className="doctor-kpi-number">
+                {String(stats.pending).padStart(2, "0")}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className={`doctor-kpi-item doctor-kpi-done ${
+                filter === "Concluídas" ? "doctor-kpi-item-selected" : ""
+              }`}
+              onClick={() =>
+                setFilter(filter === "Concluídas" ? "Todas" : "Concluídas")
+              }
+            >
+              <span className="doctor-kpi-icon" aria-hidden="true">
+                ✓
+              </span>
+              <div className="doctor-kpi-copy">
+                <strong>Concluídos</strong>
+                <small>Atendimentos finalizados</small>
+              </div>
+              <span className="doctor-kpi-number">
+                {String(stats.completed).padStart(2, "0")}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className={`doctor-kpi-item doctor-kpi-cancelled ${
+                filter === "Canceladas" ? "doctor-kpi-item-selected" : ""
+              }`}
+              onClick={() =>
+                setFilter(filter === "Canceladas" ? "Todas" : "Canceladas")
+              }
+            >
+              <span className="doctor-kpi-icon" aria-hidden="true">
+                ✕
+              </span>
+              <div className="doctor-kpi-copy">
+                <strong>Cancelados</strong>
+                <small>Consultas desmarcadas</small>
+              </div>
+              <span className="doctor-kpi-number">
+                {String(stats.cancelled).padStart(2, "0")}
+              </span>
+            </button>
+          </div>
+
+          <div className="doctor-day-total-bar">
+            <span>Total programado na agenda</span>
+            <strong>{stats.total} consulta(s)</strong>
+          </div>
+        </section>
+      </aside>
+
+      {/* COLUNA DIREITA (PRINCIPAL): PROGRAMAÇÃO VERTICAL DE PACIENTES */}
+      <div className="doctor-agenda-main">
+        {showForm && (
+          <Card
+            title="Agendar nova consulta"
+            description="Informe o paciente, data e horário do atendimento."
+          >
+            <form
+              className="doctor-new-appointment-form"
+              onSubmit={handleSubmitAppointment}
+            >
+              <div className="patient-grid patient-grid-personal">
+                <label className="patient-field">
+                  <span>Paciente</span>
+                  <select
+                    name="paciente_id"
+                    value={formData.paciente_id}
+                    onChange={handleFormChange}
+                    required
+                  >
+                    <option value="">Selecione...</option>
+                    <option value="1">Ana Beatriz Lima (#1)</option>
+                    <option value="2">Pedro Henrique Costa (#2)</option>
+                    <option value="3">João Silva (#3)</option>
+                    <option value="4">Mariana Oliveira (#4)</option>
+                  </select>
+                </label>
+
+                <label className="patient-field">
+                  <span>Data</span>
+                  <input
+                    type="date"
+                    name="data"
+                    value={formData.data}
+                    onChange={handleFormChange}
+                    required
+                  />
+                </label>
+
+                <label className="patient-field">
+                  <span>Horário</span>
+                  <input
+                    type="time"
+                    name="horario"
+                    value={formData.horario}
+                    onChange={handleFormChange}
+                    required
+                  />
+                </label>
+
+                <label className="patient-field">
+                  <span>Duração</span>
+                  <select
+                    name="duracao_minutos"
+                    value={formData.duracao_minutos}
+                    onChange={handleFormChange}
+                  >
+                    <option value="15">15 minutos</option>
+                    <option value="30">30 minutos</option>
+                    <option value="40">40 minutos</option>
+                    <option value="45">45 minutos</option>
+                    <option value="60">60 minutos</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="patient-form-footer">
+                <span />
+                <div className="patient-form-buttons">
+                  <Btn
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setShowForm(false)}
+                  >
+                    Cancelar
+                  </Btn>
+
+                  <Btn type="submit" size="sm" disabled={saving}>
+                    {saving ? "Salvando..." : "Confirmar agendamento"}
+                  </Btn>
+                </div>
+              </div>
+            </form>
+          </Card>
+        )}
+
+        <section className="card doctor-schedule-board">
+          <header className="doctor-schedule-board-header">
+            <div className="doctor-schedule-title-row">
+              <div>
+                <h2 className="card-title">Programação de Pacientes</h2>
+                <p className="doctor-schedule-subtitle">
+                  Pacientes agendados para atendimento clínico
+                </p>
+              </div>
+
+              <span className="records-count-badge">
+                {visibleAppointments.length} atendimento(s)
+              </span>
+            </div>
+
+            <div className="doctor-schedule-controls">
+              <div
+                className="records-specialty-pills"
+                role="tablist"
+                aria-label="Filtrar fila de atendimento"
+              >
+                {FILTROS_AGENDA.map((item) => (
+                  <button
+                    type="button"
+                    key={item.id}
+                    className={`records-filter-pill ${
+                      filter === item.id ? "records-filter-pill-active" : ""
+                    }`}
+                    onClick={() => setFilter(item.id)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+
+              <label className="search-field doctor-schedule-search">
+                <span className="search-symbol" aria-hidden="true">
+                  ⌕
+                </span>
+                <input
+                  type="search"
+                  aria-label="Buscar paciente na programação"
+                  placeholder="Buscar paciente ou especialidade..."
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+              </label>
+            </div>
+          </header>
+
           {loading ? (
             <div className="empty-state">
-              <strong>Carregando agendamentos...</strong>
+              <strong>Carregando fila de atendimento...</strong>
             </div>
           ) : error ? (
             <div className="empty-state">
-              <strong>Não foi possível carregar a agenda</strong>
+              <strong>Não foi possível carregar a programação</strong>
               <p>{error}</p>
-
               <Btn variant="secondary" onClick={loadAppointments}>
                 Tentar novamente
               </Btn>
@@ -519,188 +796,186 @@ export default function Agenda() {
           ) : visibleAppointments.length === 0 ? (
             <div className="empty-state">
               <span className="empty-state-icon">⌕</span>
-              <strong>Nenhum atendimento encontrado</strong>
+              <strong>Nenhum paciente nesta visualização</strong>
               <p>
-                Tente outro termo ou selecione um filtro diferente.
+                Não há atendimentos correspondentes ao filtro selecionado no
+                momento.
               </p>
-
-              <Btn
-                variant="secondary"
-                onClick={() => {
-                  setQuery("");
-                  setFilter("Todas");
-                }}
-              >
-                Limpar filtros
-              </Btn>
+              {(query || filter !== "Todas") && (
+                <Btn
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setQuery("");
+                    setFilter("Todas");
+                  }}
+                >
+                  Mostrar todos os agendamentos
+                </Btn>
+              )}
             </div>
           ) : (
-            <div className="appointment-list">
+            <div className="doctor-patient-stack">
               {visibleAppointments.map((appointment, index) => {
-                const status = getAppointmentStatus(appointment.status);
-                const patient = `Paciente ${appointment.paciente_id}`;
-                const colorClasses = [
-                  "lavender",
-                  "mint",
-                  "peach",
-                  "blue",
-                ];
+                const { statusInfo, pacienteInfo } = appointment;
+                const colorClasses = ["lavender", "mint", "peach", "blue"];
+                const isPending =
+                  statusInfo.key === "confirmed" ||
+                  statusInfo.key === "waiting";
+                const isCompleted = statusInfo.key === "completed";
+                const isCancelled = statusInfo.key === "cancelled";
 
                 return (
                   <article
-                    className="appointment-row"
                     key={appointment.id}
+                    className={`doctor-patient-card doctor-patient-card-${statusInfo.key}`}
                   >
-                    <div className="appointment-time">
-                      <strong>{formatTime(appointment.data_hora)}</strong>
-                      <span>{appointment.duracao_minutos} min</span>
+                    <div className="doctor-patient-time-box">
+                      <strong className="doctor-patient-hour">
+                        {formatTime(appointment.data_hora)}
+                      </strong>
+                      <span className="doctor-patient-duration">
+                        {appointment.duracao_minutos} min
+                      </span>
+                      <small className="doctor-patient-date">
+                        {formatDateShort(appointment.data_hora)}
+                      </small>
                     </div>
 
-                    <div
-                      className={`patient-avatar avatar-${
-                        colorClasses[index % colorClasses.length]
-                      }`}
-                      aria-hidden="true"
-                    >
-                      {initialsFromName(patient)}
-                    </div>
-
-                    <div className="appointment-info">
-                      <div className="appointment-patient-line">
-                        <h4>{patient}</h4>
-
-                        <span
-                          className={`status-pill status-${status.key}`}
-                        >
-                          {status.label}
-                        </span>
+                    <div className="doctor-patient-main">
+                      <div
+                        className={`patient-avatar avatar-${
+                          colorClasses[index % colorClasses.length]
+                        }`}
+                        aria-hidden="true"
+                      >
+                        {initialsFromName(pacienteInfo.nome)}
                       </div>
 
-                      <p>
-                        Profissional {appointment.profissional_id}
-                      </p>
+                      <div className="doctor-patient-details">
+                        <div className="doctor-patient-top-row">
+                          <h3 className="doctor-patient-name">
+                            {pacienteInfo.nome}
+                          </h3>
+                          <span className="patient-record-code">
+                            {pacienteInfo.codigo}
+                          </span>
+                          <span
+                            className={`status-pill status-${statusInfo.key}`}
+                          >
+                            {statusInfo.label}
+                          </span>
+                        </div>
 
-                      <span className="appointment-type">
-                        <span aria-hidden="true">⌖</span>
-                        Consulta · {formatDateTime(appointment.data_hora)}
-                      </span>
+                        <div className="doctor-patient-badges">
+                          <span className="patient-record-badge patient-record-badge-specialty">
+                            {pacienteInfo.especialidade}
+                          </span>
+                          <span
+                            className={`patient-record-badge ${
+                              pacienteInfo.modalidade === "Teleconsulta"
+                                ? "patient-record-badge-remote"
+                                : "patient-record-badge-presential"
+                            }`}
+                          >
+                            {pacienteInfo.modalidade}
+                          </span>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="appointment-actions">
-                      {status.key === "confirmed" && (
-                        <Btn
-                          variant="outline"
-                          size="small"
-                          onClick={handleVideoAppointment}
-                        >
-                          Teleconsulta
-                        </Btn>
+                    <div className="doctor-patient-actions">
+                      {isPending && (
+                        <>
+                          <Btn
+                            size="sm"
+                            onClick={() =>
+                              iniciarConsulta(appointment.paciente_id)
+                            }
+                          >
+                            ▶ Iniciar consulta
+                          </Btn>
+
+                          <button
+                            type="button"
+                            className="doctor-action-btn doctor-action-complete"
+                            onClick={() =>
+                              handleConcluirConsulta(appointment)
+                            }
+                            title="Marcar atendimento como realizado"
+                          >
+                            ✓ Concluir
+                          </button>
+
+                          <button
+                            type="button"
+                            className="doctor-action-btn doctor-action-cancel"
+                            disabled={busyActionId === appointment.id}
+                            onClick={() =>
+                              handleCancelarConsulta(appointment)
+                            }
+                            title="Cancelar agendamento"
+                          >
+                            ✕ Cancelar
+                          </button>
+                        </>
                       )}
 
-                      <Btn
-                        variant={
-                          status.key === "completed"
-                            ? "secondary"
-                            : "primary"
-                        }
-                        size="small"
-                        onClick={() =>
-                          openRecord(appointment.paciente_id)
-                        }
-                      >
-                        {status.key === "completed"
-                          ? "Ver prontuário"
-                          : "Atender"}
-                      </Btn>
+                      {isCompleted && (
+                        <>
+                          <Btn
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              iniciarConsulta(appointment.paciente_id)
+                            }
+                          >
+                            Abrir prontuário →
+                          </Btn>
+                          <button
+                            type="button"
+                            className="doctor-action-btn doctor-action-reopen"
+                            onClick={() =>
+                              handleReabrirConsulta(appointment)
+                            }
+                          >
+                            ↺ Reabrir
+                          </button>
+                        </>
+                      )}
+
+                      {isCancelled && (
+                        <>
+                          <button
+                            type="button"
+                            className="doctor-action-btn doctor-action-resume"
+                            disabled={busyActionId === appointment.id}
+                            onClick={() =>
+                              handleRetomarConsulta(appointment)
+                            }
+                            title="Retomar consulta cancelada"
+                          >
+                            ↺ Retomar consulta
+                          </button>
+
+                          <Btn
+                            variant="secondary"
+                            size="sm"
+                            onClick={() =>
+                              iniciarConsulta(appointment.paciente_id)
+                            }
+                          >
+                            Ver prontuário
+                          </Btn>
+                        </>
+                      )}
                     </div>
                   </article>
                 );
               })}
             </div>
           )}
-        </Card>
-
-        <aside className="agenda-aside">
-          <Card
-            title="Resumo da rotina"
-            description="Distribuição dos agendamentos cadastrados"
-          >
-            <div className="schedule-summary">
-              <div className="schedule-summary-row">
-                <span className="schedule-dot dot-blue" />
-                <span>Agendadas</span>
-                <strong>
-                  {appointments.filter(
-                    (item) => item.status === "agendado"
-                  ).length.toString().padStart(2, "0")}
-                </strong>
-              </div>
-
-              <div className="schedule-summary-row">
-                <span className="schedule-dot dot-purple" />
-                <span>Canceladas</span>
-                <strong>
-                  {stats.cancelled.toString().padStart(2, "0")}
-                </strong>
-              </div>
-
-              <div className="schedule-summary-row">
-                <span className="schedule-dot dot-green" />
-                <span>Concluídas</span>
-                <strong>
-                  {stats.completed.toString().padStart(2, "0")}
-                </strong>
-              </div>
-            </div>
-
-            <div className="schedule-note">
-              <span aria-hidden="true">ⓘ</span>
-              <p>
-                Os dados são carregados do serviço de agendamentos.
-                Os nomes e as especialidades dependem da integração
-                com os cadastros de pacientes e profissionais.
-              </p>
-            </div>
-          </Card>
-
-          <Card title="Acesso rápido">
-            <div className="quick-action-list">
-              <button
-                type="button"
-                className="quick-action"
-                onClick={() => {
-                  const firstAppointment = appointments[0];
-
-                  if (firstAppointment) {
-                    openRecord(firstAppointment.paciente_id);
-                  } else {
-                    showToast("Não há pacientes na agenda.");
-                  }
-                }}
-              >
-                <span className="quick-action-icon">▤</span>
-                <span>
-                  <strong>Prontuário clínico</strong>
-                  <small>Consultar paciente agendado</small>
-                </span>
-                <span aria-hidden="true">→</span>
-              </button>
-
-              <button
-                type="button"
-                className="quick-action"
-                onClick={handleNewAppointment}
-              >
-                <span className="quick-action-icon">＋</span>
-                <span>
-                  <strong>Novo agendamento</strong>
-                  <small>Cadastrar uma consulta</small>
-                </span>
-                <span aria-hidden="true">→</span>
-              </button>
-            </div>
-          </Card>
-        </aside>
+        </section>
       </div>
     </div>
   );
