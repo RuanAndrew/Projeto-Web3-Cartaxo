@@ -243,3 +243,37 @@ async def test_paciente_nao_pode_alterar_link_teleconsulta(client: AsyncClient):
         headers=headers_paciente,
     )
     assert resp_link.status_code == 403
+
+async def test_marcar_nao_compareceu_e_bloquear_paciente(client: AsyncClient):
+    paciente_id = uuid.uuid4()
+    prof_id = uuid.uuid4()
+    token_atendente = gerar_token("ATENDENTE")
+    token_paciente = gerar_token("PACIENTE", user_id=paciente_id)
+    data_futura = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+
+    resp_create = await client.post(
+        "/agendamentos",
+        json={
+            "paciente_id": str(paciente_id),
+            "profissional_id": str(prof_id),
+            "data_hora": data_futura,
+        },
+        headers={"Authorization": f"Bearer {token_atendente}"},
+    )
+    assert resp_create.status_code == 201
+    agendamento_id = resp_create.json()["id"]
+
+    # Paciente não pode marcar ausência
+    resp_pac = await client.patch(
+        f"/agendamentos/{agendamento_id}/nao-compareceu",
+        headers={"Authorization": f"Bearer {token_paciente}"},
+    )
+    assert resp_pac.status_code == 403
+
+    # Atendente pode marcar não compareceu
+    resp_atend = await client.patch(
+        f"/agendamentos/{agendamento_id}/nao-compareceu",
+        headers={"Authorization": f"Bearer {token_atendente}"},
+    )
+    assert resp_atend.status_code == 200
+    assert resp_atend.json()["status"] == "nao_compareceu"

@@ -49,7 +49,7 @@ const FILTROS_AGENDA = [
   { id: "Todas", label: "Todos" },
   { id: "Pendentes", label: "Próximos" },
   { id: "Concluídas", label: "Concluídos" },
-  { id: "Canceladas", label: "Cancelados" },
+  { id: "Canceladas", label: "Cancelados / Faltas" },
 ];
 
 const initialFormData = {
@@ -106,6 +106,10 @@ function getAppointmentStatus(status) {
     },
     cancelado: {
       label: "Cancelado",
+      key: "cancelled",
+    },
+    nao_compareceu: {
+      label: "Não compareceu",
       key: "cancelled",
     },
     concluido: {
@@ -555,6 +559,37 @@ export default function Agenda() {
     }
   }
 
+  async function handleNaoCompareceu(appointment) {
+    if (busyActionId === appointment.id) return;
+    setBusyActionId(appointment.id);
+
+    try {
+      const response = await fetchComSessao(
+        `${API_URL}/agendamentos/${appointment.id}/nao-compareceu`,
+        { method: "PATCH" }
+      );
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(
+          errData.detail || "Não foi possível registrar ausência."
+        );
+      }
+
+      const atualizado = await response.json();
+      setAppointments((current) =>
+        current.map((item) =>
+          item.id === appointment.id ? atualizado : item
+        )
+      );
+      showToast(`Ausência registrada para ${appointment.pacienteInfo.nome}.`);
+    } catch (err) {
+      showToast(err.message || "Erro ao registrar ausência.");
+    } finally {
+      setBusyActionId(null);
+    }
+  }
+
   function iniciarConsulta(pacienteId) {
     navigate(`/prontuario/${pacienteId}`);
   }
@@ -677,8 +712,8 @@ export default function Agenda() {
                 ✕
               </span>
               <div className="doctor-kpi-copy">
-                <strong>Cancelados</strong>
-                <small>Consultas desmarcadas</small>
+                <strong>Cancelados / Faltas</strong>
+                <small>Desmarcados ou não compareceu</small>
               </div>
               <span className="doctor-kpi-number">
                 {String(stats.cancelled).padStart(2, "0")}
@@ -1090,6 +1125,18 @@ export default function Agenda() {
                             title="Marcar atendimento como realizado"
                           >
                             ✓ Concluir
+                          </button>
+
+                          <button
+                            type="button"
+                            className="doctor-action-btn"
+                            disabled={busyActionId === appointment.id}
+                            onClick={() =>
+                              handleNaoCompareceu(appointment)
+                            }
+                            title="Registrar que o paciente não compareceu"
+                          >
+                            ⊘ Faltou
                           </button>
 
                           <button

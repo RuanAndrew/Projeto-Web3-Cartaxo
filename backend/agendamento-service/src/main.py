@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Literal
@@ -11,14 +12,43 @@ from src.core.security import UsuarioAutenticado, get_current_user
 from src.infrastructure.database.connection import get_db
 from src.models import AgendamentoDB
 
-StatusAgendamento = Literal["agendado", "aguardando", "concluido", "cancelado"]
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
+audit_logger = logging.getLogger("agendamento.auditoria")
+
+StatusAgendamento = Literal[
+    "agendado",
+    "aguardando",
+    "concluido",
+    "cancelado",
+    "nao_compareceu",
+]
 ModalidadeAgendamento = Literal["presencial", "teleconsulta"]
 
 app = FastAPI(
     title="Microsserviço de Agendamentos",
     description="API para gerenciar os agendamentos presenciais e teleconsultas da clínica.",
-    version="0.3.0",
+    version="0.4.0",
 )
+
+
+def _registrar_auditoria(
+    acao: str,
+    agendamento_id: uuid.UUID,
+    usuario: UsuarioAutenticado,
+    detalhes: str = "",
+) -> None:
+    """Registra eventos operacionais e de auditoria (RF24 / RNF12 / RNF16)."""
+    audit_logger.info(
+        "acao=%s agendamento_id=%s usuario_id=%s perfil=%s detalhes=%s",
+        acao,
+        agendamento_id,
+        usuario.id,
+        usuario.perfil,
+        detalhes,
+    )
 
 
 def _validar_data_futura(valor: datetime) -> datetime:
@@ -197,6 +227,13 @@ async def criar_agendamento(
     await db.commit()
     await db.refresh(novo_agendamento)
 
+    _registrar_auditoria(
+        "CRIAR_AGENDAMENTO",
+        novo_agendamento.id,
+        usuario,
+        f"modalidade={novo_agendamento.modalidade} data_hora={novo_agendamento.data_hora.isoformat()}",
+    )
+
     return novo_agendamento
 
 
@@ -255,7 +292,7 @@ async def registrar_link_teleconsulta(
             detail="Este agendamento é presencial e não aceita link de teleconsulta.",
         )
 
-    if agendamento.status in ("cancelado", "concluido"):
+    if agendamento.status in ("cancelado", "concluido", "nao_compareceu"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Não é possível alterar link de agendamento '{agendamento.status}'.",
@@ -264,6 +301,13 @@ async def registrar_link_teleconsulta(
     agendamento.link_teleconsulta = dados.link_teleconsulta
     await db.commit()
     await db.refresh(agendamento)
+
+    _registrar_auditoria(
+        "ATUALIZAR_LINK_TELECONSULTA",
+        agendamento.id,
+        usuario,
+        "link_registrado=True",
+    )
     return agendamento
 
 
@@ -280,7 +324,7 @@ async def remarcar_agendamento(
 
     _verificar_acesso_agendamento(agendamento, usuario)
 
-    if agendamento.status in ("cancelado", "concluido"):
+    if agendamento.status in ("cancelado", "concluido", "nao_compareceu"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Não é possível remarcar um agendamento com status '{agendamento.status}'.",
@@ -302,6 +346,13 @@ async def remarcar_agendamento(
 
     await db.commit()
     await db.refresh(agendamento)
+
+    _registrar_auditoria(
+        "REMARCAR_AGENDAMENTO",
+        agendamento.id,
+        usuario,
+        f"nova_data_hora={agendamento.data_hora.isoformat()}",
+    )
     return agendamento
 
 
@@ -321,6 +372,8 @@ async def marcar_aguardando(
     agendamento.status = "aguardando"
     await db.commit()
     await db.refresh(agendamento)
+
+    _registrar_auditoria("MARCAR_AGUARDANDO", agendamento.id, usuario)
     return agendamento
 
 
@@ -344,6 +397,33 @@ async def concluir_agendamento(
     agendamento.status = "concluido"
     await db.commit()
     await db.refresh(agendamento)
+
+    _registrar_auditoria("CONCLUIR_AGENDAMENTO", agendamento.id, usuario)
+    return agendamento
+
+
+@app.patch("/agendamentos/{agendamento_id}/nao-compareceu", response_model=Agendamento)
+async def marcar_nao_compareceu(
+    agendamento_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    usuario: UsuarioAutenticado = Depends(get_current_user),
+):
+    if usuario.perfil == "PACIENTE":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas equipe da clínica pode registrar ausência.",
+        )
+
+    agendamento = await db.get(AgendamentoDB, agendamento_id)
+    if agendamento is None:
+        raise HTTPException(status_code=404, detail="Agendamento não encontrado.")
+
+    _verificar_acesso_agendamento(agendamento, usuario)
+    agendamento.status = "nao_compareceu"
+    await db.commit()
+    await db.refresh(agendamento)
+
+    _registrar_auditoria("MARCAR_NAO_COMPARECEU", agendamento.id, usuario)
     return agendamento
 
 
@@ -362,6 +442,8 @@ async def cancelar_agendamento(
 
     await db.commit()
     await db.refresh(agendamento)
+
+    _registrar_auditoria("CANCELAR_AGENDAMENTO", agendamento.id, usuario)
     return agendamento
 
 
@@ -392,4 +474,6 @@ async def reativar_agendamento(
     agendamento.status = "agendado"
     await db.commit()
     await db.refresh(agendamento)
+
+    _registrar_auditoria("REATIVAR_AGENDAMENTO", agendamento.id, usuario)
     return agendamento

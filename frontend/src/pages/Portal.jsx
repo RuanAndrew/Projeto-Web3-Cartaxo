@@ -5,8 +5,13 @@ import { useToast } from "../components/ToastProvider.jsx";
 import Card from "../components/Card.jsx";
 import Btn from "../components/Btn.jsx";
 import {
+  listarEspecialidades,
+  listarProfissionais,
+} from "../services/profissionaisApi.js";
+import {
   garantirSessaoValida,
   lerPayload,
+  obterPacienteId,
   obterToken,
   removerToken,
 } from "../utils/auth.js";
@@ -90,7 +95,23 @@ export default function Portal() {
   const [checkedIn, setCheckedIn] = useState(false);
   const [agendamentos, setAgendamentos] = useState([]);
   const [carregandoAgenda, setCarregandoAgenda] = useState(true);
-  const [cancelandoId, setCancelandoId] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+
+  const [especialidades, setEspecialidades] = useState([]);
+  const [profissionais, setProfissionais] = useState([]);
+  const [mostrarAgendar, setMostrarAgendar] = useState(false);
+  const [salvandoAgendamento, setSalvandoAgendamento] = useState(false);
+  const [novoAgendamento, setNovoAgendamento] = useState({
+    especialidade_id: "",
+    profissional_id: "",
+    modalidade: "presencial",
+    data: "",
+    horario: "",
+  });
+
+  const [remarcandoId, setRemarcandoId] = useState(null);
+  const [remarcarForm, setRemarcarForm] = useState({ data: "", horario: "" });
+
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -117,9 +138,34 @@ export default function Portal() {
     }
   }
 
+  async function carregarCatalogosProfissionais() {
+    try {
+      const [esps, profs] = await Promise.all([
+        listarEspecialidades().catch(() => []),
+        listarProfissionais({ ativo: true }).catch(() => []),
+      ]);
+      setEspecialidades(Array.isArray(esps) ? esps : []);
+      setProfissionais(Array.isArray(profs) ? profs : []);
+    } catch {
+      /* ignora falha se serviço estiver indisponível */
+    }
+  }
+
   useEffect(() => {
     carregarConsultas();
+    carregarCatalogosProfissionais();
   }, []);
+
+  const profissionaisFiltrados = useMemo(() => {
+    if (!novoAgendamento.especialidade_id) return profissionais;
+    return profissionais.filter((p) =>
+      Array.isArray(p.especialidades)
+        ? p.especialidades.some(
+            (e) => String(e.id) === String(novoAgendamento.especialidade_id)
+          )
+        : true
+    );
+  }, [profissionais, novoAgendamento.especialidade_id]);
 
   const proximasConsultas = useMemo(() => {
     return agendamentos.filter(
@@ -141,9 +187,119 @@ export default function Portal() {
     };
   }, [proximaConsulta]);
 
+  async function handleCriarConsultaPaciente(e) {
+    e.preventDefault();
+    if (salvandoAgendamento) return;
+
+    const pacienteId = obterPacienteId();
+    if (!pacienteId) {
+      showToast("Não foi possível identificar sua conta. Faça login novamente.");
+      return;
+    }
+
+    if (!novoAgendamento.profissional_id || !novoAgendamento.data || !novoAgendamento.horario) {
+      showToast("Selecione o profissional, a data e o horário desejado.");
+      return;
+    }
+
+    const dataHora = new Date(`${novoAgendamento.data}T${novoAgendamento.horario}:00`);
+    if (Number.isNaN(dataHora.getTime())) {
+      showToast("Data ou horário inválido.");
+      return;
+    }
+
+    setSalvandoAgendamento(true);
+    try {
+      const resp = await fetchComSessao(`${API_URL}/agendamentos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paciente_id: pacienteId,
+          profissional_id: novoAgendamento.profissional_id,
+          data_hora: dataHora.toISOString(),
+          duracao_minutos: 30,
+          modalidade: novoAgendamento.modalidade,
+        }),
+      });
+
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        const msg =
+          typeof data.detail === "string"
+            ? data.detail
+            : Array.isArray(data.detail)
+              ? data.detail.map((d) => d.msg).join(" ")
+              : "Não foi possível agendar a consulta.";
+        throw new Error(msg);
+      }
+
+      setAgendamentos((prev) => [...prev, data]);
+      setMostrarAgendar(false);
+      setNovoAgendamento({
+        especialidade_id: "",
+        profissional_id: "",
+        modalidade: "presencial",
+        data: "",
+        horario: "",
+      });
+      showToast("Consulta agendada com sucesso!");
+    } catch (err) {
+      showToast(err.message || "Erro ao agendar consulta.");
+    } finally {
+      setSalvandoAgendamento(false);
+    }
+  }
+
+  async function handleConfirmarRemarcacao(consulta) {
+    if (!remarcarForm.data || !remarcarForm.horario) {
+      showToast("Informe a nova data e o novo horário.");
+      return;
+    }
+
+    const novaDataHora = new Date(`${remarcarForm.data}T${remarcarForm.horario}:00`);
+    if (Number.isNaN(novaDataHora.getTime())) {
+      showToast("Data ou horário inválido.");
+      return;
+    }
+
+    setBusyId(consulta.id);
+    try {
+      const resp = await fetchComSessao(
+        `${API_URL}/agendamentos/${consulta.id}/remarcar`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data_hora: novaDataHora.toISOString() }),
+        }
+      );
+
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        const msg =
+          typeof data.detail === "string"
+            ? data.detail
+            : Array.isArray(data.detail)
+              ? data.detail.map((d) => d.msg).join(" ")
+              : "Não foi possível remarcar a consulta.";
+        throw new Error(msg);
+      }
+
+      setAgendamentos((prev) =>
+        prev.map((item) => (item.id === consulta.id ? data : item))
+      );
+      setRemarcandoId(null);
+      setRemarcarForm({ data: "", horario: "" });
+      showToast("Consulta remarcada com sucesso!");
+    } catch (err) {
+      showToast(err.message || "Erro ao remarcar consulta.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function handleCancelarConsulta(consulta) {
-    if (cancelandoId === consulta.id) return;
-    setCancelandoId(consulta.id);
+    if (busyId === consulta.id) return;
+    setBusyId(consulta.id);
     try {
       const resp = await fetchComSessao(
         `${API_URL}/agendamentos/${consulta.id}/cancelar`,
@@ -163,7 +319,7 @@ export default function Portal() {
     } catch (err) {
       showToast(err.message || "Erro ao cancelar consulta.");
     } finally {
-      setCancelandoId(null);
+      setBusyId(null);
     }
   }
 
@@ -217,6 +373,139 @@ export default function Portal() {
           </div>
         </div>
       </section>
+
+      {mostrarAgendar && (
+        <Card
+          title="Agendar nova consulta"
+          description="Escolha a especialidade, o profissional, a modalidade e o horário."
+        >
+          <form onSubmit={handleCriarConsultaPaciente}>
+            <div className="patient-grid patient-grid-personal">
+              {especialidades.length > 0 && (
+                <label className="patient-field">
+                  <span>Especialidade</span>
+                  <select
+                    value={novoAgendamento.especialidade_id}
+                    onChange={(e) =>
+                      setNovoAgendamento((prev) => ({
+                        ...prev,
+                        especialidade_id: e.target.value,
+                        profissional_id: "",
+                      }))
+                    }
+                  >
+                    <option value="">Todas as especialidades</option>
+                    {especialidades.map((esp) => (
+                      <option key={esp.id} value={esp.id}>
+                        {esp.nome}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              <label className="patient-field">
+                <span>Profissional</span>
+                {profissionaisFiltrados.length > 0 ? (
+                  <select
+                    value={novoAgendamento.profissional_id}
+                    onChange={(e) =>
+                      setNovoAgendamento((prev) => ({
+                        ...prev,
+                        profissional_id: e.target.value,
+                      }))
+                    }
+                    required
+                  >
+                    <option value="">Selecione o profissional...</option>
+                    {profissionaisFiltrados.map((prof) => (
+                      <option key={prof.id} value={prof.id}>
+                        {prof.nome}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder="UUID do profissional"
+                    value={novoAgendamento.profissional_id}
+                    onChange={(e) =>
+                      setNovoAgendamento((prev) => ({
+                        ...prev,
+                        profissional_id: e.target.value,
+                      }))
+                    }
+                    required
+                  />
+                )}
+              </label>
+
+              <label className="patient-field">
+                <span>Modalidade</span>
+                <select
+                  value={novoAgendamento.modalidade}
+                  onChange={(e) =>
+                    setNovoAgendamento((prev) => ({
+                      ...prev,
+                      modalidade: e.target.value,
+                    }))
+                  }
+                >
+                  <option value="presencial">Presencial</option>
+                  <option value="teleconsulta">Teleconsulta (Online)</option>
+                </select>
+              </label>
+
+              <label className="patient-field">
+                <span>Data</span>
+                <input
+                  type="date"
+                  value={novoAgendamento.data}
+                  onChange={(e) =>
+                    setNovoAgendamento((prev) => ({
+                      ...prev,
+                      data: e.target.value,
+                    }))
+                  }
+                  required
+                />
+              </label>
+
+              <label className="patient-field">
+                <span>Horário</span>
+                <input
+                  type="time"
+                  value={novoAgendamento.horario}
+                  onChange={(e) =>
+                    setNovoAgendamento((prev) => ({
+                      ...prev,
+                      horario: e.target.value,
+                    }))
+                  }
+                  required
+                />
+              </label>
+            </div>
+
+            <div className="patient-form-footer" style={{ marginTop: "12px" }}>
+              <span />
+              <div className="patient-form-buttons">
+                <Btn
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setMostrarAgendar(false)}
+                >
+                  Cancelar
+                </Btn>
+                <Btn type="submit" size="sm" disabled={salvandoAgendamento}>
+                  {salvandoAgendamento ? "Agendando..." : "Confirmar consulta"}
+                </Btn>
+              </div>
+            </div>
+          </form>
+        </Card>
+      )}
 
       <section className="patient-metric-grid">
         <div className="patient-metric-card streak-card">
@@ -404,6 +693,15 @@ export default function Portal() {
                 ? "Dados sincronizados com o serviço de agendamento"
                 : "Você não possui consultas pendentes no momento"
             }
+            action={
+              <Btn
+                size="sm"
+                variant={mostrarAgendar ? "secondary" : "primary"}
+                onClick={() => setMostrarAgendar((prev) => !prev)}
+              >
+                {mostrarAgendar ? "Fechar" : "+ Agendar"}
+              </Btn>
+            }
           >
             {carregandoAgenda ? (
               <p>Carregando consultas...</p>
@@ -447,22 +745,93 @@ export default function Portal() {
                   </div>
                 )}
 
+                {remarcandoId === proximaConsulta.id && (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                      marginTop: "12px",
+                    }}
+                  >
+                    <input
+                      type="date"
+                      value={remarcarForm.data}
+                      onChange={(e) =>
+                        setRemarcarForm((prev) => ({
+                          ...prev,
+                          data: e.target.value,
+                        }))
+                      }
+                    />
+                    <input
+                      type="time"
+                      value={remarcarForm.horario}
+                      onChange={(e) =>
+                        setRemarcarForm((prev) => ({
+                          ...prev,
+                          horario: e.target.value,
+                        }))
+                      }
+                    />
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <Btn
+                        size="sm"
+                        disabled={busyId === proximaConsulta.id}
+                        onClick={() => handleConfirmarRemarcacao(proximaConsulta)}
+                      >
+                        Confirmar nova data
+                      </Btn>
+                      <Btn
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setRemarcandoId(null)}
+                      >
+                        Voltar
+                      </Btn>
+                    </div>
+                  </div>
+                )}
+
                 <div className="appointment-divider" />
 
-                <button
-                  type="button"
-                  className="patient-text-action"
-                  disabled={cancelandoId === proximaConsulta.id}
-                  onClick={() => handleCancelarConsulta(proximaConsulta)}
-                >
-                  {cancelandoId === proximaConsulta.id
-                    ? "Cancelando..."
-                    : "Cancelar consulta"}{" "}
-                  <span aria-hidden="true">✕</span>
-                </button>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="patient-text-action"
+                    onClick={() => {
+                      setRemarcandoId(proximaConsulta.id);
+                      setRemarcarForm({ data: "", horario: "" });
+                    }}
+                  >
+                    Remarcar <span aria-hidden="true">↻</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="patient-text-action"
+                    disabled={busyId === proximaConsulta.id}
+                    onClick={() => handleCancelarConsulta(proximaConsulta)}
+                  >
+                    {busyId === proximaConsulta.id
+                      ? "Cancelando..."
+                      : "Cancelar"}{" "}
+                    <span aria-hidden="true">✕</span>
+                  </button>
+                </div>
               </>
             ) : (
-              <p>Nenhum agendamento ativo encontrado para sua conta.</p>
+              <div>
+                <p>Nenhum agendamento ativo encontrado para sua conta.</p>
+                <Btn
+                  size="sm"
+                  onClick={() => setMostrarAgendar(true)}
+                  style={{ marginTop: "8px" }}
+                >
+                  + Agendar minha consulta
+                </Btn>
+              </div>
             )}
           </Card>
 
