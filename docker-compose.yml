@@ -231,6 +231,8 @@ services:
       REDIS_URL: redis://redis:6379/1
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-clinica}:${RABBITMQ_PASSWORD:-clinica123}@rabbitmq:5672/
       AUTH_SERVICE_URL: http://auth-service:8000
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-troque-por-uma-chave-secreta-forte} #coloquei a mesma senha do auth-service para que o agendamento-service consiga validar os tokens JWT emitidos pelo auth-service
+      JWT_ALGORITHM: HS256 #aqui também coloquei o mesmo algoritmo do auth-service para que o agendamento-service consiga validar os tokens JWT emitidos pelo auth-service
     depends_on:
       agendamento-db: {condition: service_healthy}
       redis: {condition: service_healthy}
