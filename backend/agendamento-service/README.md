@@ -37,7 +37,8 @@ docker compose exec agendamento-service pytest -v
 * `PATCH /agendamentos/{id}/concluir` — Marca consulta como concluída
 * `PATCH /agendamentos/{id}/nao-compareceu` — Registra ausência do paciente
 * `PATCH /agendamentos/{id}/cancelar` — Cancela o agendamento
-* `PATCH /agendamentos/{id}/reativar` — Reativa agendamento cancelado (equipe clínica)
+* `PATCH /agendamentos/{id}/reativar` — Reativa/reabre agendamento cancelado, concluído ou com ausência (equipe clínica)
+* `DELETE /agendamentos/{id}` — Exclui o agendamento permanentemente (equipe clínica)
 
 ## Telas do Frontend Integradas
 * `frontend/src/pages/Agenda.jsx` — Gestão de agenda clínica (profissionais e atendentes), teleconsultas, conclusão, ausência (`nao_compareceu`) e cancelamento.

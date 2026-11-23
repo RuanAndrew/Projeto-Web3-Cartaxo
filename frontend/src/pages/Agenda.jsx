@@ -62,14 +62,47 @@ const initialFormData = {
   link_teleconsulta: "",
 };
 
+const PROFISSIONAL_UUID_PADRAO = "119d0caf-2b76-4782-85a5-65937af47356";
+
+function resolverUuidProfissional(prof, index = 0, usuarioAtual = null) {
+  const idStr = String(prof?.id || "").trim();
+  if (UUID_REGEX.test(idStr)) return idStr;
+  if (index === 0) {
+    if (
+      usuarioAtual?.perfil === "PROFISSIONAL" &&
+      UUID_REGEX.test(String(usuarioAtual?.sub || ""))
+    ) {
+      return String(usuarioAtual.sub);
+    }
+    return PROFISSIONAL_UUID_PADRAO;
+  }
+  const sufixo = idStr.replace(/\D/g, "").padStart(12, "0").slice(-12) || String(index + 1).padStart(12, "0");
+  return `00000000-0000-4000-8000-${sufixo}`;
+}
+
+function obterNomePaciente(paciente) {
+  return String(paciente?.nome_completo || paciente?.nome || "").trim();
+}
+
+function indexarPaciente(mapa, paciente) {
+  if (!paciente) return;
+  if (paciente.id) {
+    mapa[String(paciente.id).toLowerCase()] = paciente;
+  }
+  if (paciente.user_account_id) {
+    mapa[String(paciente.user_account_id).toLowerCase()] = paciente;
+  }
+}
+
 function initialsFromName(name) {
-  return String(name || "?")
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
+  const partes = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .map((part) => part.replace(/[^A-Za-zÀ-ÿ]/g, ""))
+    .filter(Boolean);
+  if (partes.length === 0) return "PC";
+  if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
+  return `${partes[0][0]}${partes[partes.length - 1][0]}`.toUpperCase();
 }
 
 function formatDateShort(value) {
@@ -159,8 +192,11 @@ export default function Agenda() {
   }, []);
 
   async function carregarCatalogos() {
+    const mapa = {};
     try {
-      const respPac = await fetchComSessao(`${API_URL}/api/v1/pacientes`);
+      const respPac = await fetchComSessao(
+        `${API_URL}/api/v1/pacientes?limit=100`
+      );
       if (respPac.ok) {
         const dadosPac = await respPac.json();
         const lista = Array.isArray(dadosPac)
@@ -168,12 +204,11 @@ export default function Agenda() {
           : Array.isArray(dadosPac?.items)
             ? dadosPac.items
             : [];
-        setPacientesLista(lista);
-        const mapa = {};
+        setPacientesLista(lista.filter((p) => p?.ativo !== false));
         for (const p of lista) {
-          if (p?.id) mapa[String(p.id)] = p;
+          indexarPaciente(mapa, p);
         }
-        setPacientesMap(mapa);
+        setPacientesMap((prev) => ({ ...prev, ...mapa }));
       }
     } catch {
       /* fallback para entrada manual de UUID se pacientes-service estiver offline */
@@ -181,10 +216,53 @@ export default function Agenda() {
 
     try {
       const dadosProf = await listarProfissionais({ ativo: true });
-      const listaProf = Array.isArray(dadosProf) ? dadosProf : [];
+      const listaProf = (Array.isArray(dadosProf) ? dadosProf : []).map(
+        (prof, idx) => ({
+          ...prof,
+          uuid: resolverUuidProfissional(prof, idx, usuarioAtual),
+        })
+      );
       setProfissionaisLista(listaProf);
     } catch {
-      /* fallback para entrada manual de UUID se profissionais-service estiver offline */
+      /* fallback se profissionais-service estiver offline */
+    }
+
+    return mapa;
+  }
+
+  async function carregarPacientesPorIds(ids, mapaExistente = {}) {
+    const faltantes = [
+      ...new Set(
+        ids
+          .map((id) => String(id || "").trim())
+          .filter(
+            (id) => UUID_REGEX.test(id) && !mapaExistente[id.toLowerCase()]
+          )
+      ),
+    ];
+
+    if (faltantes.length === 0) return;
+
+    const encontrados = await Promise.all(
+      faltantes.map(async (pid) => {
+        try {
+          const resp = await fetchComSessao(
+            `${API_URL}/api/v1/pacientes/${pid}`
+          );
+          if (!resp.ok) return null;
+          return await resp.json();
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    const extras = {};
+    for (const pac of encontrados) {
+      if (pac) indexarPaciente(extras, pac);
+    }
+    if (Object.keys(extras).length > 0) {
+      setPacientesMap((prev) => ({ ...prev, ...extras }));
     }
   }
 
@@ -209,25 +287,42 @@ export default function Agenda() {
       }
 
       setAppointments(data);
+      return data;
     } catch (err) {
       setError(
         err.message ||
           "Erro ao carregar os agendamentos. Verifique a conexão."
       );
+      return [];
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    carregarCatalogos();
-    loadAppointments();
+    let ativo = true;
+    async function inicializar() {
+      const [mapaInicial, agendamentosCarregados] = await Promise.all([
+        carregarCatalogos(),
+        loadAppointments(),
+      ]);
+      if (!ativo || !Array.isArray(agendamentosCarregados)) return;
+      await carregarPacientesPorIds(
+        agendamentosCarregados.map((apt) => apt.paciente_id),
+        mapaInicial
+      );
+    }
+    inicializar();
+    return () => {
+      ativo = false;
+    };
   }, []);
 
   const profissionaisMap = useMemo(() => {
     const mapa = {};
     for (const prof of profissionaisLista) {
-      if (prof?.id) mapa[String(prof.id)] = prof;
+      if (prof?.id) mapa[String(prof.id).toLowerCase()] = prof;
+      if (prof?.uuid) mapa[String(prof.uuid).toLowerCase()] = prof;
     }
     return mapa;
   }, [profissionaisLista]);
@@ -235,19 +330,21 @@ export default function Agenda() {
   const enrichedAppointments = useMemo(() => {
     return appointments.map((apt) => {
       const statusInfo = getAppointmentStatus(apt.status);
-      const pac = pacientesMap[String(apt.paciente_id)];
-      const prof = profissionaisMap[String(apt.profissional_id)];
+      const pac = pacientesMap[String(apt.paciente_id || "").toLowerCase()];
+      const prof =
+        profissionaisMap[String(apt.profissional_id || "").toLowerCase()];
       const especialidadeProf =
         prof?.especialidades?.[0]?.nome || "Atendimento Clínico";
       const isTeleconsulta = apt.modalidade === "teleconsulta";
+      const nomePaciente = obterNomePaciente(pac);
 
       return {
         ...apt,
         statusInfo,
         isTeleconsulta,
         pacienteInfo: {
-          nome: pac?.nome || `Paciente (${resumirUuid(apt.paciente_id)})`,
-          codigo: `ID ${resumirUuid(apt.paciente_id)}`,
+          nome: nomePaciente || "Paciente cadastrado",
+          iniciais: nomePaciente ? initialsFromName(nomePaciente) : "PC",
           especialidade: especialidadeProf,
           profissionalNome: prof?.nome || null,
           modalidadeLabel: isTeleconsulta ? "Teleconsulta" : "Presencial",
@@ -265,10 +362,8 @@ export default function Agenda() {
       const matchesSearch =
         !search ||
         pacienteInfo.nome.toLowerCase().includes(search) ||
-        pacienteInfo.codigo.toLowerCase().includes(search) ||
         pacienteInfo.especialidade.toLowerCase().includes(search) ||
         pacienteInfo.modalidadeLabel.toLowerCase().includes(search) ||
-        String(appointment.id ?? "").toLowerCase().includes(search) ||
         statusInfo.label.toLowerCase().includes(search);
 
       const isPending =
@@ -310,11 +405,11 @@ export default function Agenda() {
 
   function handleNewAppointment() {
     const defaultProfId =
-      usuarioAtual?.perfil === "PROFISSIONAL" && usuarioAtual?.sub
-        ? String(usuarioAtual.sub)
-        : profissionaisLista[0]?.id
-          ? String(profissionaisLista[0].id)
-          : "";
+      profissionaisLista[0]?.uuid
+        ? String(profissionaisLista[0].uuid)
+        : usuarioAtual?.perfil === "PROFISSIONAL" && usuarioAtual?.sub
+          ? String(usuarioAtual.sub)
+          : PROFISSIONAL_UUID_PADRAO;
 
     setFormData({
       ...initialFormData,
@@ -408,6 +503,7 @@ export default function Agenda() {
       }
 
       setAppointments((current) => [...current, data]);
+      carregarPacientesPorIds([data.paciente_id], pacientesMap);
       setShowForm(false);
       setFormData({ ...initialFormData });
       showToast(
@@ -590,6 +686,72 @@ export default function Agenda() {
     }
   }
 
+  async function handleReabrirConsulta(appointment) {
+    if (busyActionId === appointment.id) return;
+    setBusyActionId(appointment.id);
+
+    try {
+      const response = await fetchComSessao(
+        `${API_URL}/agendamentos/${appointment.id}/reativar`,
+        { method: "PATCH" }
+      );
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(
+          errData.detail || "Não foi possível reabrir a consulta."
+        );
+      }
+
+      const atualizado = await response.json();
+      setAppointments((current) =>
+        current.map((item) =>
+          item.id === appointment.id ? atualizado : item
+        )
+      );
+      showToast(
+        `Atendimento de ${appointment.pacienteInfo.nome} reaberto e retornado para Próximos.`
+      );
+    } catch (err) {
+      showToast(err.message || "Erro ao reabrir a consulta.");
+    } finally {
+      setBusyActionId(null);
+    }
+  }
+
+  async function handleExcluirConsulta(appointment) {
+    if (busyActionId === appointment.id) return;
+    const confirmou = window.confirm(
+      `Deseja realmente excluir o agendamento de ${appointment.pacienteInfo.nome}? Essa ação não poderá ser desfeita.`
+    );
+    if (!confirmou) return;
+
+    setBusyActionId(appointment.id);
+
+    try {
+      const response = await fetchComSessao(
+        `${API_URL}/agendamentos/${appointment.id}`,
+        { method: "DELETE" }
+      );
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(
+          errData.detail || "Não foi possível excluir a consulta."
+        );
+      }
+
+      setAppointments((current) =>
+        current.filter((item) => item.id !== appointment.id)
+      );
+      showToast(`Agendamento de ${appointment.pacienteInfo.nome} excluído.`);
+    } catch (err) {
+      showToast(err.message || "Erro ao excluir a consulta.");
+    } finally {
+      setBusyActionId(null);
+    }
+  }
+
   function iniciarConsulta(pacienteId) {
     navigate(`/prontuario/${pacienteId}`);
   }
@@ -742,58 +904,43 @@ export default function Agenda() {
               <div className="patient-grid patient-grid-personal">
                 <label className="patient-field">
                   <span>Paciente</span>
-                  {pacientesLista.length > 0 ? (
-                    <select
-                      name="paciente_id"
-                      value={formData.paciente_id}
-                      onChange={handleFormChange}
-                      required
-                    >
-                      <option value="">Selecione o paciente...</option>
-                      {pacientesLista.map((pac) => (
-                        <option key={pac.id} value={pac.id}>
-                          {pac.nome} ({resumirUuid(pac.id)})
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      name="paciente_id"
-                      placeholder="UUID do paciente"
-                      value={formData.paciente_id}
-                      onChange={handleFormChange}
-                      required
-                    />
-                  )}
+                  <select
+                    name="paciente_id"
+                    value={formData.paciente_id}
+                    onChange={handleFormChange}
+                    required
+                  >
+                    <option value="">
+                      {pacientesLista.length > 0
+                        ? "Selecione o paciente..."
+                        : "Nenhum paciente cadastrado"}
+                    </option>
+                    {pacientesLista.map((pac) => (
+                      <option key={pac.id} value={pac.id}>
+                        {obterNomePaciente(pac)}
+                      </option>
+                    ))}
+                  </select>
                 </label>
 
                 <label className="patient-field">
                   <span>Profissional</span>
-                  {profissionaisLista.length > 0 ? (
-                    <select
-                      name="profissional_id"
-                      value={formData.profissional_id}
-                      onChange={handleFormChange}
-                      required
-                    >
-                      <option value="">Selecione o profissional...</option>
-                      {profissionaisLista.map((prof) => (
-                        <option key={prof.id} value={prof.id}>
+                  <select
+                    name="profissional_id"
+                    value={formData.profissional_id}
+                    onChange={handleFormChange}
+                    required
+                  >
+                    <option value="">Selecione o profissional...</option>
+                    {profissionaisLista.map((prof) => {
+                      const valorUuid = prof.uuid || String(prof.id);
+                      return (
+                        <option key={valorUuid} value={valorUuid}>
                           {prof.nome}
                         </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      name="profissional_id"
-                      placeholder="UUID do profissional"
-                      value={formData.profissional_id}
-                      onChange={handleFormChange}
-                      required
-                    />
-                  )}
+                      );
+                    })}
+                  </select>
                 </label>
 
                 <label className="patient-field">
@@ -998,7 +1145,7 @@ export default function Agenda() {
                         }`}
                         aria-hidden="true"
                       >
-                        {initialsFromName(pacienteInfo.nome)}
+                        {pacienteInfo.iniciais}
                       </div>
 
                       <div className="doctor-patient-details">
@@ -1006,9 +1153,6 @@ export default function Agenda() {
                           <h3 className="doctor-patient-name">
                             {pacienteInfo.nome}
                           </h3>
-                          <span className="patient-record-code">
-                            {pacienteInfo.codigo}
-                          </span>
                           <span
                             className={`status-pill status-${statusInfo.key}`}
                           >
@@ -1154,15 +1298,37 @@ export default function Agenda() {
                       )}
 
                       {isCompleted && (
-                        <Btn
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            iniciarConsulta(appointment.paciente_id)
-                          }
-                        >
-                          Abrir prontuário →
-                        </Btn>
+                        <>
+                          <Btn
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              iniciarConsulta(appointment.paciente_id)
+                            }
+                          >
+                            Abrir prontuário →
+                          </Btn>
+
+                          <button
+                            type="button"
+                            className="doctor-action-btn doctor-action-reopen"
+                            disabled={busyActionId === appointment.id}
+                            onClick={() => handleReabrirConsulta(appointment)}
+                            title="Reverter conclusão e retornar consulta para Próximos"
+                          >
+                            ↺ Reabrir
+                          </button>
+
+                          <button
+                            type="button"
+                            className="doctor-action-btn doctor-action-delete"
+                            disabled={busyActionId === appointment.id}
+                            onClick={() => handleExcluirConsulta(appointment)}
+                            title="Excluir agendamento"
+                          >
+                            ✕ Excluir
+                          </button>
+                        </>
                       )}
 
                       {isCancelled && (

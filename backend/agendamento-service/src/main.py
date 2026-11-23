@@ -143,6 +143,9 @@ async def _verificar_conflito_com_lock(
         {"prof_id": str(profissional_id)},
     )
 
+    if inicio_novo.tzinfo is None:
+        inicio_novo = inicio_novo.replace(tzinfo=timezone.utc)
+
     fim_novo = inicio_novo + timedelta(minutes=duracao_minutos)
 
     consulta = select(AgendamentoDB).where(
@@ -156,6 +159,11 @@ async def _verificar_conflito_com_lock(
     existentes = resultado.scalars().all()
 
     for existente in existentes:
+        if ignorar_agendamento_id is not None and existente.id == ignorar_agendamento_id:
+            continue
+        if existente.status not in ("agendado", "aguardando"):
+            continue
+
         inicio_existente = existente.data_hora
         if inicio_existente.tzinfo is None:
             inicio_existente = inicio_existente.replace(tzinfo=timezone.utc)
@@ -463,6 +471,8 @@ async def reativar_agendamento(
     if agendamento is None:
         raise HTTPException(status_code=404, detail="Agendamento não encontrado.")
 
+    _verificar_acesso_agendamento(agendamento, usuario)
+
     await _verificar_conflito_com_lock(
         db=db,
         profissional_id=agendamento.profissional_id,
@@ -471,9 +481,49 @@ async def reativar_agendamento(
         ignorar_agendamento_id=agendamento.id,
     )
 
+    status_anterior = agendamento.status
     agendamento.status = "agendado"
     await db.commit()
     await db.refresh(agendamento)
 
-    _registrar_auditoria("REATIVAR_AGENDAMENTO", agendamento.id, usuario)
+    _registrar_auditoria(
+        "REATIVAR_AGENDAMENTO",
+        agendamento.id,
+        usuario,
+        f"status_anterior={status_anterior}",
+    )
     return agendamento
+
+
+@app.delete(
+    "/agendamentos/{agendamento_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def excluir_agendamento(
+    agendamento_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    usuario: UsuarioAutenticado = Depends(get_current_user),
+):
+    if usuario.perfil == "PACIENTE":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Pacientes não podem excluir agendamentos.",
+        )
+
+    agendamento = await db.get(AgendamentoDB, agendamento_id)
+    if agendamento is None:
+        raise HTTPException(status_code=404, detail="Agendamento não encontrado.")
+
+    _verificar_acesso_agendamento(agendamento, usuario)
+    status_anterior = agendamento.status
+
+    await db.delete(agendamento)
+    await db.commit()
+
+    _registrar_auditoria(
+        "EXCLUIR_AGENDAMENTO",
+        agendamento_id,
+        usuario,
+        f"status_anterior={status_anterior}",
+    )
+    return None

@@ -56,6 +56,9 @@ class FakeDB:
     async def get(self, model, item_id: uuid.UUID):
         return self.itens.get(item_id)
 
+    async def delete(self, obj: AgendamentoDB):
+        self.itens.pop(obj.id, None)
+
 
 @pytest.fixture
 def fake_db():
@@ -277,3 +280,94 @@ async def test_marcar_nao_compareceu_e_bloquear_paciente(client: AsyncClient):
     )
     assert resp_atend.status_code == 200
     assert resp_atend.json()["status"] == "nao_compareceu"
+
+
+async def test_reabrir_consulta_concluida_e_bloquear_outro_profissional(client: AsyncClient):
+    prof_id = uuid.uuid4()
+    outro_prof_id = uuid.uuid4()
+    token_prof = gerar_token("PROFISSIONAL", user_id=prof_id)
+    token_outro = gerar_token("PROFISSIONAL", user_id=outro_prof_id)
+    data_futura = (datetime.now(timezone.utc) + timedelta(days=8)).isoformat()
+
+    resp_create = await client.post(
+        "/agendamentos",
+        json={
+            "paciente_id": str(uuid.uuid4()),
+            "profissional_id": str(prof_id),
+            "data_hora": data_futura,
+        },
+        headers={"Authorization": f"Bearer {token_prof}"},
+    )
+    assert resp_create.status_code == 201
+    agendamento_id = resp_create.json()["id"]
+
+    resp_concluir = await client.patch(
+        f"/agendamentos/{agendamento_id}/concluir",
+        headers={"Authorization": f"Bearer {token_prof}"},
+    )
+    assert resp_concluir.status_code == 200
+    assert resp_concluir.json()["status"] == "concluido"
+
+    # Outro profissional não pode reabrir consulta de terceiro
+    resp_outro = await client.patch(
+        f"/agendamentos/{agendamento_id}/reativar",
+        headers={"Authorization": f"Bearer {token_outro}"},
+    )
+    assert resp_outro.status_code == 403
+
+    # O próprio profissional pode reverter conclusão voltando para agendado
+    resp_reabrir = await client.patch(
+        f"/agendamentos/{agendamento_id}/reativar",
+        headers={"Authorization": f"Bearer {token_prof}"},
+    )
+    assert resp_reabrir.status_code == 200
+    assert resp_reabrir.json()["status"] == "agendado"
+
+
+async def test_excluir_agendamento_permissoes_e_remocao(client: AsyncClient):
+    paciente_id = uuid.uuid4()
+    prof_id = uuid.uuid4()
+    outro_prof_id = uuid.uuid4()
+    token_prof = gerar_token("PROFISSIONAL", user_id=prof_id)
+    token_outro = gerar_token("PROFISSIONAL", user_id=outro_prof_id)
+    token_paciente = gerar_token("PACIENTE", user_id=paciente_id)
+    data_futura = (datetime.now(timezone.utc) + timedelta(days=9)).isoformat()
+
+    resp_create = await client.post(
+        "/agendamentos",
+        json={
+            "paciente_id": str(paciente_id),
+            "profissional_id": str(prof_id),
+            "data_hora": data_futura,
+        },
+        headers={"Authorization": f"Bearer {token_prof}"},
+    )
+    assert resp_create.status_code == 201
+    agendamento_id = resp_create.json()["id"]
+
+    # Paciente não pode excluir
+    resp_pac = await client.delete(
+        f"/agendamentos/{agendamento_id}",
+        headers={"Authorization": f"Bearer {token_paciente}"},
+    )
+    assert resp_pac.status_code == 403
+
+    # Outro profissional não pode excluir
+    resp_outro = await client.delete(
+        f"/agendamentos/{agendamento_id}",
+        headers={"Authorization": f"Bearer {token_outro}"},
+    )
+    assert resp_outro.status_code == 403
+
+    # Profissional responsável pode excluir
+    resp_del = await client.delete(
+        f"/agendamentos/{agendamento_id}",
+        headers={"Authorization": f"Bearer {token_prof}"},
+    )
+    assert resp_del.status_code == 204
+
+    resp_get = await client.get(
+        f"/agendamentos/{agendamento_id}",
+        headers={"Authorization": f"Bearer {token_prof}"},
+    )
+    assert resp_get.status_code == 404

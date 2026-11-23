@@ -6011,24 +6011,31 @@ p {
   transition: all 0.15s ease;
 }
 
+.doctor-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .doctor-action-complete {
   background: #ecfdf5;
   border-color: #a7f3d0;
   color: #047857;
 }
 
-.doctor-action-complete:hover {
+.doctor-action-complete:hover:not(:disabled) {
   background: #d1fae5;
   border-color: #6ee7b7;
 }
 
-.doctor-action-cancel {
+.doctor-action-cancel,
+.doctor-action-delete {
   background: #fff1f2;
   border-color: #fecdd3;
   color: #be123c;
 }
 
-.doctor-action-cancel:hover:not(:disabled) {
+.doctor-action-cancel:hover:not(:disabled),
+.doctor-action-delete:hover:not(:disabled) {
   background: #ffe4e6;
   border-color: #fda4af;
 }
@@ -6039,7 +6046,7 @@ p {
   color: #475569;
 }
 
-.doctor-action-reopen:hover {
+.doctor-action-reopen:hover:not(:disabled) {
   background: #e2e8f0;
   color: #1e293b;
 }
