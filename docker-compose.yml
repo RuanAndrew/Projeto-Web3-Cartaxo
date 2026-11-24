@@ -56,7 +56,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 60s
     networks: [clinica-net]
 
   clinico-db:
@@ -116,6 +116,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 60s
     networks: [clinica-net]
 
   profissionais-db:
@@ -135,8 +136,28 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 60s
     networks: [clinica-net]
 
+  prontuario-db:
+    image: postgres:16-alpine
+    container_name: prontuario-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PRONTUARIO_DB_USER:-prontuario_user}
+      POSTGRES_PASSWORD: ${PRONTUARIO_DB_PASSWORD:-prontuario_pass}
+      POSTGRES_DB: ${PRONTUARIO_DB_NAME:-prontuario_db}
+    volumes:
+      - prontuario_db_data:/var/lib/postgresql/data
+    ports:
+      - "5440:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PRONTUARIO_DB_USER:-prontuario_user} -d ${PRONTUARIO_DB_NAME:-prontuario_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks: [clinica-net]
   redis:
     image: redis:7-alpine
     container_name: redis
@@ -287,6 +308,24 @@ services:
       - ./backend/clinico-service:/app
     networks: [clinica-net]
 
+  prontuario-service:
+    build:
+      context: ./backend/prontuario-service
+      dockerfile: Dockerfile
+    container_name: prontuario-service
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${PRONTUARIO_DB_USER:-prontuario_user}:${PRONTUARIO_DB_PASSWORD:-prontuario_pass}@prontuario-db:5432/${PRONTUARIO_DB_NAME:-prontuario_db}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-changeme-super-secret}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      PACIENTES_SERVICE_URL: http://pacientes-service:8000
+    depends_on:
+      prontuario-db: {condition: service_healthy}
+    ports:
+      - "8008:8000"
+    volumes:
+      - ./backend/prontuario-service:/app
+    networks: [clinica-net]
   notificacao-service:
     build:
       context: ./backend/notificacao-service
@@ -363,6 +402,7 @@ services:
       CLINICO_SERVICE_URL: http://clinico-service:8000
       NOTIFICACAO_SERVICE_URL: http://notificacao-service:8000
       DOCUMENTOS_SERVICE_URL: http://documentos-service:8000
+      PRONTUARIO_SERVICE_URL: http://prontuario-service:8000
       CORS_ORIGINS: http://localhost:5173
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-changeme-super-secret}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
@@ -373,6 +413,7 @@ services:
       - clinico-service
       - notificacao-service
       - documentos-service
+      - prontuario-service
     ports:
       - "8000:8000"
     volumes:
@@ -404,6 +445,7 @@ volumes:
   clinico_db_data:
   notificacao_db_data:
   redis_data:
+  prontuario_db_data:
   rabbitmq_data:
   documentos_db_data:
   profissionais_db_data:

@@ -27,6 +27,8 @@ def rotas() -> Dict[str, str]:
         "documentos": settings.documentos_service_url,
         "agendamentos": settings.agendamento_service_url,
         "api": settings.pacientes_service_url,
+        "prontuarios": settings.prontuario_service_url,
+
     }
 
 ROTAS_PUBLICAS = {("auth", "login"), ("auth", "refresh")}
