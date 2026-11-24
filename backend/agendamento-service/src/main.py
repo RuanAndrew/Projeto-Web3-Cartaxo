@@ -51,6 +51,26 @@ def _registrar_auditoria(
     )
 
 
+FUSO_CLINICA = timezone(timedelta(hours=-3))
+
+
+def _data_local_clinica(valor: datetime) -> datetime.date:
+    if valor.tzinfo is None:
+        valor = valor.replace(tzinfo=timezone.utc)
+    return valor.astimezone(FUSO_CLINICA).date()
+
+
+def _hoje_local_clinica() -> datetime.date:
+    return datetime.now(timezone.utc).astimezone(FUSO_CLINICA).date()
+
+
+def _agendamento_vencido_nao_iniciado(agendamento: AgendamentoDB) -> bool:
+    return (
+        agendamento.status in ("agendado", "aguardando")
+        and _data_local_clinica(agendamento.data_hora) < _hoje_local_clinica()
+    )
+
+
 def _validar_data_futura(valor: datetime) -> datetime:
     if valor.tzinfo is None:
         valor = valor.replace(tzinfo=timezone.utc)
@@ -265,7 +285,24 @@ async def listar_agendamentos(
         consulta = consulta.where(AgendamentoDB.profissional_id == usuario.id)
 
     resultado = await db.execute(consulta)
-    return resultado.scalars().all()
+    lista = list(resultado.scalars().all())
+
+    alterou_vencidos = False
+    for ag in lista:
+        if _agendamento_vencido_nao_iniciado(ag):
+            ag.status = "cancelado"
+            alterou_vencidos = True
+            _registrar_auditoria(
+                "CANCELAR_AUTOMATICO_PRAZO_EXPIRADO",
+                ag.id,
+                usuario,
+                f"data_hora={ag.data_hora.isoformat()}",
+            )
+
+    if alterou_vencidos:
+        await db.commit()
+
+    return lista
 
 
 @app.get("/agendamentos/{agendamento_id}", response_model=Agendamento)
@@ -279,6 +316,18 @@ async def buscar_agendamento(
         raise HTTPException(status_code=404, detail="Agendamento não encontrado.")
 
     _verificar_acesso_agendamento(agendamento, usuario)
+
+    if _agendamento_vencido_nao_iniciado(agendamento):
+        agendamento.status = "cancelado"
+        await db.commit()
+        await db.refresh(agendamento)
+        _registrar_auditoria(
+            "CANCELAR_AUTOMATICO_PRAZO_EXPIRADO",
+            agendamento.id,
+            usuario,
+            f"data_hora={agendamento.data_hora.isoformat()}",
+        )
+
     return agendamento
 
 
@@ -480,6 +529,15 @@ async def reativar_agendamento(
 
     _verificar_acesso_agendamento(agendamento, usuario)
 
+    if _data_local_clinica(agendamento.data_hora) < _hoje_local_clinica():
+        if agendamento.status in ("agendado", "aguardando"):
+            agendamento.status = "cancelado"
+            await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Esta consulta é de uma data passada e não foi realizada no dia agendado. Não é possível retomá-la.",
+        )
+
     await _verificar_conflito_com_lock(
         db=db,
         profissional_id=agendamento.profissional_id,
@@ -522,6 +580,13 @@ async def excluir_agendamento(
         raise HTTPException(status_code=404, detail="Agendamento não encontrado.")
 
     _verificar_acesso_agendamento(agendamento, usuario)
+
+    if _data_local_clinica(agendamento.data_hora) < _hoje_local_clinica():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Não é permitido excluir registros de consultas de datas passadas.",
+        )
+
     status_anterior = agendamento.status
 
     await db.delete(agendamento)

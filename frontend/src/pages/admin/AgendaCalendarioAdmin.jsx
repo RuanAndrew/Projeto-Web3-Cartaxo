@@ -431,24 +431,33 @@ export default function AgendaCalendarioAdmin() {
   const agendamentosDoMedico = useMemo(() => {
     if (!profissionalAtual?.uuid) return [];
     const uuidAlvo = String(profissionalAtual.uuid).toLowerCase();
-    return agendamentosClinica.filter(
-      (apt) =>
-        String(apt.profissional_id || "").toLowerCase() === uuidAlvo &&
-        apt.status !== "cancelado" &&
-        apt.status !== "nao_compareceu"
-    );
-  }, [agendamentosClinica, profissionalAtual]);
+    return agendamentosClinica
+      .filter(
+        (apt) => String(apt.profissional_id || "").toLowerCase() === uuidAlvo
+      )
+      .map((apt) => {
+        const dataApt = extrairDataLocalIso(apt.data_hora);
+        const vencido =
+          dataApt &&
+          dataApt < hoje &&
+          (apt.status === "agendado" || apt.status === "aguardando");
+        return vencido
+          ? { ...apt, status: "cancelado", canceladoAutomatico: true }
+          : apt;
+      });
+  }, [agendamentosClinica, profissionalAtual, hoje]);
 
   const celulasMes = useMemo(
     () => construirGradeMes(anoMes.ano, anoMes.mes),
     [anoMes]
   );
 
-  // Agrupa tanto as consultas reais do médico quanto as disponibilidades por data ISO
+  // Agrupa todas as consultas (realizadas, canceladas, faltas e agendadas) e disponibilidades por data ISO
   const itensPorDataIso = useMemo(() => {
     const mapa = {};
     for (const celula of celulasMes) {
       if (!celula) continue;
+      const ehPassado = celula.dataIso < hoje;
 
       const consultasData = agendamentosDoMedico
         .filter((apt) => extrairDataLocalIso(apt.data_hora) === celula.dataIso)
@@ -462,6 +471,26 @@ export default function AgendaCalendarioAdmin() {
           )}:${String(minFim % 60).padStart(2, "0")}`;
           const pac =
             pacientesMap[String(apt.paciente_id || "").toLowerCase()];
+          const status = String(apt.status || "agendado").toLowerCase();
+          const statusLabel =
+            status === "concluido" || status === "concluída"
+              ? "Realizada"
+              : status === "nao_compareceu"
+                ? "Não compareceu"
+                : status === "cancelado"
+                  ? apt.canceladoAutomatico
+                    ? "Cancelada (não iniciada no dia)"
+                    : "Cancelada"
+                  : "Programada";
+          const statusKey =
+            status === "concluido" || status === "concluída"
+              ? "completed"
+              : status === "nao_compareceu"
+                ? "noshow"
+                : status === "cancelado"
+                  ? "cancelled"
+                  : "confirmed";
+
           return {
             key: `apt-${apt.id}`,
             tipo: "CONSULTA",
@@ -469,43 +498,71 @@ export default function AgendaCalendarioAdmin() {
             inicio: ini,
             fim,
             pacienteNome: obterNomePaciente(pac) || "Paciente agendado",
-            modalidade: apt.modalidade,
-            status: apt.status,
+            modalidade:
+              apt.modalidade === "teleconsulta" ? "Teleconsulta" : "Presencial",
+            status,
+            statusLabel,
+            statusKey,
           };
         });
 
-      const dispData = disponibilidades
-        .filter((slot) => {
-          if (slot.data_atendimento) {
-            return slot.data_atendimento === celula.dataIso;
-          }
-          return slot.dia_semana === celula.diaSemana;
-        })
-        .filter((slot) => {
-          const ini = formatHora(slot.horario_inicio);
-          return !consultasData.some((c) => c.inicio === ini);
-        })
-        .map((slot) => ({
-          key: `disp-${slot.id}`,
-          tipo: "DISPONIBILIDADE",
-          id: slot.id,
-          inicio: formatHora(slot.horario_inicio),
-          fim: formatHora(slot.horario_fim),
-          pacienteNome: null,
-          recorrente: !slot.data_atendimento,
-        }));
+      // Em datas passadas, exibe apenas o histórico real de consultas (sem faixas vazias recorrentes)
+      const dispData = ehPassado
+        ? []
+        : disponibilidades
+            .filter((slot) => {
+              if (slot.data_atendimento) {
+                return slot.data_atendimento === celula.dataIso;
+              }
+              return slot.dia_semana === celula.diaSemana;
+            })
+            .filter((slot) => {
+              const ini = formatHora(slot.horario_inicio);
+              return !consultasData.some((c) => c.inicio === ini);
+            })
+            .map((slot) => ({
+              key: `disp-${slot.id}`,
+              tipo: "DISPONIBILIDADE",
+              id: slot.id,
+              inicio: formatHora(slot.horario_inicio),
+              fim: formatHora(slot.horario_fim),
+              pacienteNome: null,
+              status: "disponivel",
+              statusLabel: "Horário livre",
+              statusKey: "confirmed",
+              recorrente: !slot.data_atendimento,
+            }));
 
       mapa[celula.dataIso] = [...consultasData, ...dispData].sort((a, b) =>
         a.inicio.localeCompare(b.inicio)
       );
     }
     return mapa;
-  }, [celulasMes, agendamentosDoMedico, disponibilidades, pacientesMap]);
+  }, [celulasMes, agendamentosDoMedico, disponibilidades, pacientesMap, hoje]);
+
+  const ehDataSelecionadaPassada = useMemo(
+    () => Boolean(dataSelecionada && dataSelecionada < hoje),
+    [dataSelecionada, hoje]
+  );
 
   const itensDoDiaSelecionado = useMemo(() => {
     if (!dataSelecionada) return [];
     return itensPorDataIso[dataSelecionada] || [];
   }, [dataSelecionada, itensPorDataIso]);
+
+  const resumoDiaSelecionado = useMemo(() => {
+    let realizadas = 0;
+    let canceladas = 0;
+    let faltas = 0;
+    let programadas = 0;
+    for (const item of itensDoDiaSelecionado) {
+      if (item.statusKey === "completed") realizadas += 1;
+      else if (item.statusKey === "cancelled") canceladas += 1;
+      else if (item.statusKey === "noshow") faltas += 1;
+      else programadas += 1;
+    }
+    return { realizadas, canceladas, faltas, programadas };
+  }, [itensDoDiaSelecionado]);
 
   const catalogoComercial = useMemo(
     () => gerarSlotsComerciais(duracaoMinutos),
@@ -514,10 +571,13 @@ export default function AgendaCalendarioAdmin() {
 
   const slotsOcupadosNoDiaSelecionado = useMemo(() => {
     const ocupados = new Set();
+    const ativosDoDia = itensDoDiaSelecionado.filter(
+      (s) => s.statusKey !== "cancelled" && s.statusKey !== "noshow"
+    );
     for (const item of catalogoComercial) {
       const iniNovo = horarioParaMinutos(item.inicio);
       const fimNovo = horarioParaMinutos(item.fim);
-      const conflita = itensDoDiaSelecionado.some((s) => {
+      const conflita = ativosDoDia.some((s) => {
         const iniExist = horarioParaMinutos(s.inicio);
         const fimExist = horarioParaMinutos(s.fim);
         return iniNovo < fimExist && fimNovo > iniExist;
@@ -777,7 +837,10 @@ export default function AgendaCalendarioAdmin() {
 
                       <div className="calendar-day-previews">
                         {itensDia.slice(0, 3).map((s) => (
-                          <span key={s.key} className="calendar-day-mini-pill">
+                          <span
+                            key={s.key}
+                            className={`calendar-day-mini-pill calendar-day-mini-pill-${s.statusKey}`}
+                          >
                             {s.inicio}
                             {s.pacienteNome
                               ? ` · ${s.pacienteNome.split(" ")[0]}`
@@ -796,158 +859,232 @@ export default function AgendaCalendarioAdmin() {
               </div>
             </div>
 
-            {/* COLUNA DIREITA: DETALHE E AGENDAMENTO RÁPIDO DO DIA SELECIONADO */}
+            {/* COLUNA DIREITA: HISTÓRICO (SE DATA PASSADA) OU AGENDAMENTO (SE HOJE/FUTURO) */}
             <aside className="calendar-day-detail-card">
               <div className="calendar-day-detail-header">
-                <span className="eyebrow">DATA SELECIONADA</span>
+                <span className="eyebrow">
+                  {ehDataSelecionadaPassada
+                    ? "HISTÓRICO DE CONSULTAS (DATA ENCERRADA)"
+                    : "DATA SELECIONADA"}
+                </span>
                 <h3>{formatDataExtenso(dataSelecionada)}</h3>
                 <p>
                   {itensDoDiaSelecionado.length === 0
-                    ? "Nenhuma consulta agendada para esta data."
-                    : `${itensDoDiaSelecionado.length} horário(s) ocupado(s) nesta data.`}
+                    ? ehDataSelecionadaPassada
+                      ? "Nenhum registro de consulta nesta data."
+                      : "Nenhuma consulta agendada para esta data."
+                    : `${itensDoDiaSelecionado.length} registro(s) encontrado(s) em ${formatDataBR(
+                        dataSelecionada
+                      )}.`}
                 </p>
-              </div>
 
-              <div className="calendar-day-detail-section">
-                <strong className="calendar-day-section-title">
-                  Agendamentos em {formatDataBR(dataSelecionada)}
-                </strong>
-
-                {itensDoDiaSelecionado.length === 0 ? (
-                  <div className="calendar-day-empty-notice">
-                    Esta data está livre. Selecione o paciente e o horário
-                    abaixo para agendar.
-                  </div>
-                ) : (
-                  <div className="week-day-slots">
-                    {itensDoDiaSelecionado.map((item) => (
-                      <div className="slot-badge" key={item.key}>
-                        <strong>
-                          {item.inicio} – {item.fim}
-                        </strong>
-                        {item.pacienteNome && (
-                          <span className="slot-date-chip slot-date-chip-specific">
-                            {item.pacienteNome}
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          className="slot-action-btn slot-action-remove"
-                          title="Remover agendamento"
-                          onClick={() => handleRemoverItem(item)}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
+                {itensDoDiaSelecionado.length > 0 && (
+                  <div className="calendar-history-summary-pills">
+                    {resumoDiaSelecionado.realizadas > 0 && (
+                      <span className="calendar-summary-chip calendar-summary-chip-completed">
+                        ✓ {resumoDiaSelecionado.realizadas} realizada(s)
+                      </span>
+                    )}
+                    {resumoDiaSelecionado.canceladas > 0 && (
+                      <span className="calendar-summary-chip calendar-summary-chip-cancelled">
+                        ✕ {resumoDiaSelecionado.canceladas} cancelada(s)
+                      </span>
+                    )}
+                    {resumoDiaSelecionado.faltas > 0 && (
+                      <span className="calendar-summary-chip calendar-summary-chip-noshow">
+                        ⊘ {resumoDiaSelecionado.faltas} não compareceu
+                      </span>
+                    )}
+                    {resumoDiaSelecionado.programadas > 0 && (
+                      <span className="calendar-summary-chip calendar-summary-chip-confirmed">
+                        ◷ {resumoDiaSelecionado.programadas} programada(s)
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
 
               <div className="calendar-day-detail-section">
                 <strong className="calendar-day-section-title">
-                  Novo agendamento em {formatDataBR(dataSelecionada)}
+                  {ehDataSelecionadaPassada
+                    ? `Histórico do dia ${formatDataBR(dataSelecionada)}`
+                    : `Consultas em ${formatDataBR(dataSelecionada)}`}
                 </strong>
 
-                <SearchableCombobox
-                  id="calendario-select-paciente"
-                  label="Paciente"
-                  placeholder="Pesquisar paciente por nome ou CPF..."
-                  value={pacienteId}
-                  options={opcoesPacientes}
-                  selectedOption={pacienteSelecionadoOption}
-                  searching={buscandoPacServer}
-                  hintText="Busque por nome ou CPF"
-                  onSearchChange={setTermoBuscaPac}
-                  onSelect={(val) => setPacienteId(val)}
-                />
-
-                <div
-                  className="schedule-field-head schedule-field-head-between"
-                  style={{ marginTop: "6px" }}
-                >
-                  <select
-                    aria-label="Modalidade"
-                    className="form-input"
-                    style={{ maxWidth: "150px", height: "36px" }}
-                    value={modalidade}
-                    onChange={(e) => setModalidade(e.target.value)}
-                  >
-                    <option value="presencial">Presencial</option>
-                    <option value="teleconsulta">Teleconsulta</option>
-                  </select>
-
-                  <div className="schedule-duration-toggle">
-                    {[15, 20].map((min) => (
-                      <button
-                        key={min}
-                        type="button"
-                        className={`date-shortcut-chip ${
-                          duracaoMinutos === min
-                            ? "date-shortcut-chip-active"
-                            : ""
-                        }`}
-                        onClick={() => {
-                          setDuracaoMinutos(min);
-                          setSlotsParaAdicionar([]);
-                        }}
+                {itensDoDiaSelecionado.length === 0 ? (
+                  <div className="calendar-day-empty-notice">
+                    {ehDataSelecionadaPassada
+                      ? "Não houve consultas registradas nesta data."
+                      : "Esta data está livre. Selecione o paciente e o horário abaixo para agendar."}
+                  </div>
+                ) : (
+                  <div className="calendar-history-list">
+                    {itensDoDiaSelecionado.map((item) => (
+                      <article
+                        key={item.key}
+                        className={`calendar-history-item calendar-history-item-${item.statusKey}`}
                       >
-                        ⏱ {min} min
-                      </button>
+                        <div className="calendar-history-item-main">
+                          <div className="calendar-history-time-row">
+                            <strong>
+                              {item.inicio} – {item.fim}
+                            </strong>
+                            <span
+                              className={`status-pill status-${item.statusKey}`}
+                            >
+                              {item.statusLabel}
+                            </span>
+                          </div>
+                          {item.pacienteNome && (
+                            <div className="calendar-history-patient-row">
+                              <span className="calendar-history-patient-name">
+                                {item.pacienteNome}
+                              </span>
+                              {item.modalidade && (
+                                <small className="calendar-history-modality">
+                                  · {item.modalidade}
+                                </small>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {!ehDataSelecionadaPassada && (
+                          <button
+                            type="button"
+                            className="slot-action-btn slot-action-remove"
+                            title="Remover agendamento"
+                            onClick={() => handleRemoverItem(item)}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </article>
                     ))}
                   </div>
-                </div>
-
-                <div className="commercial-slots-grid-noscroll">
-                  {catalogoComercial.map((slot) => {
-                    const ocupado = slotsOcupadosNoDiaSelecionado.has(slot.key);
-                    const selecionado = slotsParaAdicionar.includes(slot.key);
-                    return (
-                      <button
-                        key={slot.key}
-                        type="button"
-                        disabled={ocupado}
-                        onClick={() => toggleSlotNovo(slot.key)}
-                        className={`commercial-slot-chip ${
-                          selecionado ? "commercial-slot-chip-selected" : ""
-                        } ${ocupado ? "commercial-slot-chip-occupied" : ""}`}
-                      >
-                        <strong>
-                          {slot.inicio} – {slot.fim}
-                        </strong>
-                        <small>
-                          {ocupado
-                            ? "Ocupado"
-                            : selecionado
-                              ? "✓ Selecionado"
-                              : `${duracaoMinutos} min`}
-                        </small>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div style={{ marginTop: "10px" }}>
-                  <Btn
-                    className="btn-block"
-                    disabled={
-                      salvando ||
-                      !profissionalId ||
-                      !pacienteId ||
-                      slotsParaAdicionar.length === 0
-                    }
-                    onClick={handleAdicionarNoDia}
-                  >
-                    {salvando
-                      ? "Agendando..."
-                      : slotsParaAdicionar.length > 0
-                        ? `+ Agendar ${slotsParaAdicionar.length} consulta(s) em ${formatDataBR(
-                            dataSelecionada
-                          )}`
-                        : "Selecione o paciente e o horário acima"}
-                  </Btn>
-                </div>
+                )}
               </div>
+
+              {ehDataSelecionadaPassada ? (
+                <div className="calendar-past-date-lock-notice">
+                  <span>🔒</span>
+                  <div>
+                    <strong>Data anterior à atual</strong>
+                    <p>
+                      Datas passadas exibem apenas o histórico de consultas
+                      (realizadas, canceladas e ausências) e não permitem novos
+                      agendamentos.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="calendar-day-detail-section">
+                  <strong className="calendar-day-section-title">
+                    Novo agendamento em {formatDataBR(dataSelecionada)}
+                  </strong>
+
+                  <SearchableCombobox
+                    id="calendario-select-paciente"
+                    label="Paciente"
+                    placeholder="Pesquisar paciente por nome ou CPF..."
+                    value={pacienteId}
+                    options={opcoesPacientes}
+                    selectedOption={pacienteSelecionadoOption}
+                    searching={buscandoPacServer}
+                    hintText="Busque por nome ou CPF"
+                    onSearchChange={setTermoBuscaPac}
+                    onSelect={(val) => setPacienteId(val)}
+                  />
+
+                  <div
+                    className="schedule-field-head schedule-field-head-between"
+                    style={{ marginTop: "6px" }}
+                  >
+                    <select
+                      aria-label="Modalidade"
+                      className="form-input"
+                      style={{ maxWidth: "150px", height: "36px" }}
+                      value={modalidade}
+                      onChange={(e) => setModalidade(e.target.value)}
+                    >
+                      <option value="presencial">Presencial</option>
+                      <option value="teleconsulta">Teleconsulta</option>
+                    </select>
+
+                    <div className="schedule-duration-toggle">
+                      {[15, 20].map((min) => (
+                        <button
+                          key={min}
+                          type="button"
+                          className={`date-shortcut-chip ${
+                            duracaoMinutos === min
+                              ? "date-shortcut-chip-active"
+                              : ""
+                          }`}
+                          onClick={() => {
+                            setDuracaoMinutos(min);
+                            setSlotsParaAdicionar([]);
+                          }}
+                        >
+                          ⏱ {min} min
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="commercial-slots-grid-noscroll">
+                    {catalogoComercial.map((slot) => {
+                      const ocupado = slotsOcupadosNoDiaSelecionado.has(
+                        slot.key
+                      );
+                      const selecionado = slotsParaAdicionar.includes(slot.key);
+                      return (
+                        <button
+                          key={slot.key}
+                          type="button"
+                          disabled={ocupado}
+                          onClick={() => toggleSlotNovo(slot.key)}
+                          className={`commercial-slot-chip ${
+                            selecionado ? "commercial-slot-chip-selected" : ""
+                          } ${ocupado ? "commercial-slot-chip-occupied" : ""}`}
+                        >
+                          <strong>
+                            {slot.inicio} – {slot.fim}
+                          </strong>
+                          <small>
+                            {ocupado
+                              ? "Ocupado"
+                              : selecionado
+                                ? "✓ Selecionado"
+                                : `${duracaoMinutos} min`}
+                          </small>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div style={{ marginTop: "10px" }}>
+                    <Btn
+                      className="btn-block"
+                      disabled={
+                        salvando ||
+                        !profissionalId ||
+                        !pacienteId ||
+                        slotsParaAdicionar.length === 0
+                      }
+                      onClick={handleAdicionarNoDia}
+                    >
+                      {salvando
+                        ? "Agendando..."
+                        : slotsParaAdicionar.length > 0
+                          ? `+ Agendar ${slotsParaAdicionar.length} consulta(s) em ${formatDataBR(
+                              dataSelecionada
+                            )}`
+                          : "Selecione o paciente e o horário acima"}
+                    </Btn>
+                  </div>
+                </div>
+              )}
             </aside>
           </div>
         </div>

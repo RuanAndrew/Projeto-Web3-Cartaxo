@@ -374,6 +374,33 @@ function formatTime(value) {
   });
 }
 
+function obterDataLocalIso(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const ano = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+}
+
+function obterHojeLocalIso() {
+  return obterDataLocalIso(new Date());
+}
+
+function ehAgendamentoDeDataPassada(dataHora) {
+  const dataAg = obterDataLocalIso(dataHora);
+  if (!dataAg) return false;
+  return dataAg < obterHojeLocalIso();
+}
+
+function minutosDoDiaLocal(dataHora) {
+  if (!dataHora) return 0;
+  const d = new Date(dataHora);
+  if (Number.isNaN(d.getTime())) return 0;
+  return d.getHours() * 60 + d.getMinutes();
+}
+
 function resumirUuid(id) {
   const texto = String(id || "");
   return texto.length > 8 ? `${texto.slice(0, 8)}...` : texto;
@@ -437,6 +464,7 @@ export default function Agenda() {
   const [busyActionId, setBusyActionId] = useState(null);
   const [editingLinkId, setEditingLinkId] = useState(null);
   const [linkDraft, setLinkDraft] = useState("");
+  const [avisoExpirados, setAvisoExpirados] = useState("");
   const [formData, setFormData] = useState(initialFormData);
 
   const usuarioAtual = useMemo(() => {
@@ -539,8 +567,39 @@ export default function Agenda() {
         throw new Error("A API retornou um formato inesperado.");
       }
 
-      setAppointments(data);
-      return data;
+      // Verifica se alguma consulta de data anterior ficou pendente e cancela automaticamente
+      const vencidosPendentes = data.filter(
+        (apt) =>
+          (apt.status === "agendado" || apt.status === "aguardando") &&
+          ehAgendamentoDeDataPassada(apt.data_hora)
+      );
+
+      let listaNormalizada = data;
+      if (vencidosPendentes.length > 0) {
+        await Promise.all(
+          vencidosPendentes.map((apt) =>
+            fetchComSessao(`${API_URL}/agendamentos/${apt.id}/cancelar`, {
+              method: "PATCH",
+            }).catch(() => null)
+          )
+        );
+        listaNormalizada = data.map((apt) =>
+          (apt.status === "agendado" || apt.status === "aguardando") &&
+          ehAgendamentoDeDataPassada(apt.data_hora)
+            ? { ...apt, status: "cancelado", canceladoPorPrazo: true }
+            : apt
+        );
+        const msg =
+          vencidosPendentes.length === 1
+            ? `1 consulta de data anterior (${formatDateShort(
+                vencidosPendentes[0].data_hora
+              )}) não foi iniciada no dia agendado, foi cancelada automaticamente e não pode ser retomada.`
+            : `${vencidosPendentes.length} consultas de datas anteriores não foram iniciadas no dia agendado, foram canceladas automaticamente e não podem ser retomadas.`;
+        setAvisoExpirados(msg);
+      }
+
+      setAppointments(listaNormalizada);
+      return listaNormalizada;
     } catch (err) {
       setError(
         err.message ||
@@ -784,7 +843,13 @@ export default function Agenda() {
 
   const enrichedAppointments = useMemo(() => {
     return appointments.map((apt) => {
-      const statusInfo = getAppointmentStatus(apt.status);
+      const dataPassada = ehAgendamentoDeDataPassada(apt.data_hora);
+      const statusNormalizado =
+        dataPassada &&
+        (apt.status === "agendado" || apt.status === "aguardando")
+          ? "cancelado"
+          : apt.status;
+      const statusInfo = getAppointmentStatus(statusNormalizado);
       const pac = pacientesMap[String(apt.paciente_id || "").toLowerCase()];
       const prof =
         profissionaisMap[String(apt.profissional_id || "").toLowerCase()];
@@ -795,6 +860,8 @@ export default function Agenda() {
 
       return {
         ...apt,
+        status: statusNormalizado,
+        dataPassada,
         statusInfo,
         isTeleconsulta,
         pacienteInfo: {
@@ -833,6 +900,11 @@ export default function Agenda() {
         (filter === "Canceladas" && isCancelledOrNoShow);
 
       return matchesSearch && matchesFilter;
+    }).sort((a, b) => {
+      const diffHorario =
+        minutosDoDiaLocal(a.data_hora) - minutosDoDiaLocal(b.data_hora);
+      if (diffHorario !== 0) return diffHorario;
+      return new Date(a.data_hora).getTime() - new Date(b.data_hora).getTime();
     });
   }, [enrichedAppointments, query, filter]);
 
@@ -1051,6 +1123,14 @@ export default function Agenda() {
   }
 
   async function handleRetomarConsulta(appointment) {
+    if (ehAgendamentoDeDataPassada(appointment.data_hora)) {
+      const msg = `A consulta de ${appointment.pacienteInfo.nome} (${formatDateShort(
+        appointment.data_hora
+      )}) é de uma data passada, foi cancelada por não ter sido realizada no dia e não pode ser retomada.`;
+      setAvisoExpirados(msg);
+      return;
+    }
+
     if (busyActionId === appointment.id) return;
     setBusyActionId(appointment.id);
 
@@ -1148,6 +1228,14 @@ export default function Agenda() {
   }
 
   async function handleReabrirConsulta(appointment) {
+    if (ehAgendamentoDeDataPassada(appointment.data_hora)) {
+      const msg = `O atendimento de ${appointment.pacienteInfo.nome} (${formatDateShort(
+        appointment.data_hora
+      )}) pertence a uma data passada e não pode ser reaberto para a fila de próximos.`;
+      setAvisoExpirados(msg);
+      return;
+    }
+
     if (busyActionId === appointment.id) return;
     setBusyActionId(appointment.id);
 
@@ -1181,6 +1269,14 @@ export default function Agenda() {
   }
 
   async function handleExcluirConsulta(appointment) {
+    if (ehAgendamentoDeDataPassada(appointment.data_hora)) {
+      const msg = `O registro de ${appointment.pacienteInfo.nome} (${formatDateShort(
+        appointment.data_hora
+      )}) pertence a uma data passada e não pode ser excluído do histórico.`;
+      setAvisoExpirados(msg);
+      return;
+    }
+
     if (busyActionId === appointment.id) return;
     const confirmou = window.confirm(
       `Deseja realmente excluir o agendamento de ${appointment.pacienteInfo.nome}? Essa ação não poderá ser desfeita.`
@@ -1529,6 +1625,28 @@ export default function Agenda() {
             </div>
           </header>
 
+          {avisoExpirados && (
+            <div className="doctor-expired-alert" role="alert">
+              <div className="doctor-expired-alert-content">
+                <span className="doctor-expired-alert-icon" aria-hidden="true">
+                  ⚠
+                </span>
+                <div>
+                  <strong>Consulta encerrada por prazo expirado</strong>
+                  <p>{avisoExpirados}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="doctor-expired-alert-close"
+                aria-label="Fechar aviso"
+                onClick={() => setAvisoExpirados("")}
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           {loading ? (
             <div className="empty-state">
               <strong>Carregando fila de atendimento...</strong>
@@ -1760,41 +1878,74 @@ export default function Agenda() {
                             Abrir prontuário →
                           </Btn>
 
-                          <button
-                            type="button"
-                            className="doctor-action-btn doctor-action-reopen"
-                            disabled={busyActionId === appointment.id}
-                            onClick={() => handleReabrirConsulta(appointment)}
-                            title="Reverter conclusão e retornar consulta para Próximos"
-                          >
-                            ↺ Reabrir
-                          </button>
+                          {!appointment.dataPassada && (
+                            <>
+                              <button
+                                type="button"
+                                className="doctor-action-btn doctor-action-reopen"
+                                disabled={busyActionId === appointment.id}
+                                onClick={() =>
+                                  handleReabrirConsulta(appointment)
+                                }
+                                title="Reverter conclusão e retornar consulta para Próximos"
+                              >
+                                ↺ Reabrir
+                              </button>
 
-                          <button
-                            type="button"
-                            className="doctor-action-btn doctor-action-delete"
-                            disabled={busyActionId === appointment.id}
-                            onClick={() => handleExcluirConsulta(appointment)}
-                            title="Excluir agendamento"
-                          >
-                            ✕ Excluir
-                          </button>
+                              <button
+                                type="button"
+                                className="doctor-action-btn doctor-action-delete"
+                                disabled={busyActionId === appointment.id}
+                                onClick={() =>
+                                  handleExcluirConsulta(appointment)
+                                }
+                                title="Excluir agendamento"
+                              >
+                                ✕ Excluir
+                              </button>
+                            </>
+                          )}
                         </>
                       )}
 
                       {isCancelled && (
                         <>
-                          <button
-                            type="button"
-                            className="doctor-action-btn doctor-action-resume"
-                            disabled={busyActionId === appointment.id}
-                            onClick={() =>
-                              handleRetomarConsulta(appointment)
-                            }
-                            title="Retomar consulta cancelada"
-                          >
-                            ↺ Retomar consulta
-                          </button>
+                          {appointment.dataPassada ? (
+                            <button
+                              type="button"
+                              className="doctor-action-btn doctor-action-expired-lock"
+                              onClick={() => handleRetomarConsulta(appointment)}
+                              title="Consultas de datas passadas não podem ser retomadas"
+                            >
+                              ⊘ Prazo encerrado
+                            </button>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                className="doctor-action-btn doctor-action-resume"
+                                disabled={busyActionId === appointment.id}
+                                onClick={() =>
+                                  handleRetomarConsulta(appointment)
+                                }
+                                title="Retomar consulta cancelada"
+                              >
+                                ↺ Retomar consulta
+                              </button>
+
+                              <button
+                                type="button"
+                                className="doctor-action-btn doctor-action-delete"
+                                disabled={busyActionId === appointment.id}
+                                onClick={() =>
+                                  handleExcluirConsulta(appointment)
+                                }
+                                title="Excluir agendamento"
+                              >
+                                ✕ Excluir
+                              </button>
+                            </>
+                          )}
 
                           <Btn
                             variant="secondary"

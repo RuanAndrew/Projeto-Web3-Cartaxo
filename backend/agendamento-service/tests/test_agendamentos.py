@@ -371,3 +371,46 @@ async def test_excluir_agendamento_permissoes_e_remocao(client: AsyncClient):
         headers={"Authorization": f"Bearer {token_prof}"},
     )
     assert resp_get.status_code == 404
+
+
+async def test_cancelamento_automatico_data_passada_e_bloqueio_retomada(
+    client: AsyncClient, fake_db: FakeDB
+):
+    prof_id = uuid.uuid4()
+    token_prof = gerar_token("PROFISSIONAL", user_id=prof_id)
+    data_passada = datetime.now(timezone.utc) - timedelta(days=3)
+
+    agendamento_vencido = AgendamentoDB(
+        id=uuid.uuid4(),
+        paciente_id=uuid.uuid4(),
+        profissional_id=prof_id,
+        data_hora=data_passada,
+        duracao_minutos=30,
+        modalidade="presencial",
+        status="agendado",
+    )
+    fake_db.add(agendamento_vencido)
+
+    # Ao listar, deve ser marcado automaticamente como cancelado
+    resp_list = await client.get(
+        "/agendamentos",
+        headers={"Authorization": f"Bearer {token_prof}"},
+    )
+    assert resp_list.status_code == 200
+    itens = resp_list.json()
+    assert len(itens) == 1
+    assert itens[0]["status"] == "cancelado"
+
+    # Tentar retomar consulta de data passada deve ser bloqueado (400)
+    resp_reativar = await client.patch(
+        f"/agendamentos/{agendamento_vencido.id}/reativar",
+        headers={"Authorization": f"Bearer {token_prof}"},
+    )
+    assert resp_reativar.status_code == 400
+
+    # Tentar excluir registro de consulta de data passada deve ser bloqueado (400)
+    resp_excluir_passado = await client.delete(
+        f"/agendamentos/{agendamento_vencido.id}",
+        headers={"Authorization": f"Bearer {token_prof}"},
+    )
+    assert resp_excluir_passado.status_code == 400

@@ -5984,11 +5984,14 @@ p {
   grid-template-columns: 112px minmax(0, 1fr) auto;
   align-items: center;
   gap: 18px;
-  padding: 16px 18px;
+  min-height: 96px;
+  height: 96px;
+  padding: 14px 18px;
   background: #f9fbff;
   border: 1px solid #dbe4f3;
   border-left: 4px solid #315fe8;
   border-radius: 14px;
+  box-sizing: border-box;
   transition:
     background 0.16s ease,
     border-color 0.16s ease,
@@ -6052,6 +6055,214 @@ p {
   border: 1px solid rgba(148, 163, 184, 0.32) !important;
 }
 
+.doctor-expired-alert {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 16px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  color: #991b1b;
+}
+
+.doctor-expired-alert-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.doctor-expired-alert-icon {
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.doctor-expired-alert-content strong {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #7f1d1d;
+}
+
+.doctor-expired-alert-content p {
+  margin: 2px 0 0;
+  font-size: 12.8px;
+  color: #991b1b;
+}
+
+.doctor-expired-alert-close {
+  border: none;
+  background: transparent;
+  color: #991b1b;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.doctor-expired-alert-close:hover {
+  background: rgba(239, 68, 68, 0.14);
+}
+
+.doctor-action-expired-lock {
+  background: rgba(15, 23, 42, 0.06);
+  border-color: rgba(15, 23, 42, 0.18);
+  color: #64748b;
+}
+
+.doctor-action-expired-lock:hover {
+  background: rgba(15, 23, 42, 0.11);
+  color: #334155;
+}
+
+/* Estilos de histórico de consultas no Calendário Mensal */
+.calendar-day-mini-pill-completed {
+  background: rgba(16, 185, 129, 0.16);
+  color: #065f46;
+}
+
+.calendar-day-mini-pill-cancelled {
+  background: rgba(239, 68, 68, 0.15);
+  color: #991b1b;
+}
+
+.calendar-day-mini-pill-noshow {
+  background: rgba(15, 23, 42, 0.14);
+  color: #1e293b;
+}
+
+.calendar-history-summary-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.calendar-summary-chip {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.calendar-summary-chip-completed {
+  background: rgba(16, 185, 129, 0.14);
+  color: #065f46;
+}
+
+.calendar-summary-chip-cancelled {
+  background: rgba(239, 68, 68, 0.13);
+  color: #991b1b;
+}
+
+.calendar-summary-chip-noshow {
+  background: rgba(15, 23, 42, 0.12);
+  color: #1e293b;
+}
+
+.calendar-summary-chip-confirmed {
+  background: #e0f2fe;
+  color: #075985;
+}
+
+.calendar-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.calendar-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #3b82f6;
+  background: #f8fafc;
+}
+
+.calendar-history-item-completed {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.28);
+  border-left-color: #10b981;
+}
+
+.calendar-history-item-cancelled {
+  background: rgba(239, 68, 68, 0.075);
+  border-color: rgba(239, 68, 68, 0.26);
+  border-left-color: #ef4444;
+}
+
+.calendar-history-item-noshow {
+  background: rgba(15, 23, 42, 0.085);
+  border-color: rgba(15, 23, 42, 0.24);
+  border-left-color: #334155;
+}
+
+.calendar-history-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.calendar-history-time-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.calendar-history-time-row strong {
+  font-size: 13.5px;
+  color: #0f172a;
+}
+
+.calendar-history-patient-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.calendar-history-patient-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.calendar-history-modality {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.calendar-past-date-lock-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 11px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+}
+
+.calendar-past-date-lock-notice strong {
+  display: block;
+  font-size: 13px;
+  color: #1e293b;
+}
+
+.calendar-past-date-lock-notice p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
 .doctor-patient-time-box {
   display: flex;
   flex-direction: column;
@@ -6102,30 +6313,47 @@ p {
 .doctor-patient-top-row {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
+  min-width: 0;
 }
 
 .doctor-patient-name {
   margin: 0;
   color: #172033;
-  font-size: 16.5px;
+  font-size: 16px;
   font-weight: 780;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.doctor-patient-top-row .status-pill {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .doctor-patient-badges {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.doctor-patient-badges .patient-record-badge {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .doctor-patient-actions {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .doctor-action-btn {
