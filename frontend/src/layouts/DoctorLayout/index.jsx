@@ -58,6 +58,29 @@ const clinicalNavigation = [
     </svg>
   ),
   },
+// Exercicios terapeuticos
+  {
+    label: "Exercícios",
+    path: "/exercicios",
+    end: false,
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M6.5 6.5h11" />
+        <path d="M6.5 17.5h11" />
+        <path d="M3 10v4" />
+        <path d="M21 10v4" />
+        <path d="M6 8v8" />
+        <path d="M18 8v8" />
+      </svg>
+    ),
+  },
 ];
 
 const upcomingModules = [
@@ -92,8 +115,10 @@ export default function DoctorLayout() {
       ? "Prontuários"
     : location.pathname === "/pacientes"
       ? "Pacientes"
+    : location.pathname === "/exercicios"
+      ? "Exercícios"
       : "Agenda clínica";
-
+  
   const formattedDate = new Intl.DateTimeFormat("pt-BR", {
     weekday: "long",
     day: "2-digit",

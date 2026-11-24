@@ -22,6 +22,9 @@ import AdminLayout from "./layouts/AdminLayout/index.jsx";
 import DoctorLayout from "./layouts/DoctorLayout/index.jsx";
 import PatientLayout from "./layouts/PatientLayout/index.jsx";
 
+import ExerciciosMedico from "./pages/ExerciciosMedico.jsx";
+import ExerciciosPaciente from "./pages/ExerciciosPaciente.jsx";
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -56,6 +59,14 @@ export default function App() {
               element={<Prontuario />}
             />
             <Route path="/pacientes" element={<Pacientes />} />
+            <Route path="/exercicios" element={<ExerciciosMedico />} />
+          </Route>
+
+          <Route element={<PatientLayout />}>
+            <Route path="/portal" element={<Portal />} />
+            <Route path="/portal/receitas" element={<Receitas />} />
+            <Route path="/portal/exercicios" element={<ExerciciosPaciente />} />
+            <Route path="/perfil" element={<PatientProfile />} />
           </Route>
 
           <Route element={<PatientLayout />}>

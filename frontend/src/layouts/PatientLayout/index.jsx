@@ -36,6 +36,15 @@ export default function PatientLayout() {
             </NavLink>
 
             <NavLink
+              to="/portal/exercicios"
+              className={({ isActive }) =>
+                `patient-nav-link ${isActive ? "patient-nav-link-active" : ""}`
+              }
+            >
+              Meus exercícios
+            </NavLink>
+
+            <NavLink
               to="/perfil"
               className={({ isActive }) =>
                 `patient-nav-link ${isActive ? "patient-nav-link-active" : ""}`
