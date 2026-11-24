@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useToast } from "../components/ToastProvider.jsx";
@@ -82,6 +82,254 @@ function resolverUuidProfissional(prof, index = 0, usuarioAtual = null) {
 
 function obterNomePaciente(paciente) {
   return String(paciente?.nome_completo || paciente?.nome || "").trim();
+}
+
+function formatarCpf(cpf = "") {
+  const digitos = String(cpf || "").replace(/\D/g, "");
+  if (digitos.length !== 11) return "";
+  return digitos.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+}
+
+function normalizarTexto(texto = "") {
+  return String(texto || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function SearchableCombobox({
+  id,
+  label,
+  placeholder,
+  value,
+  options,
+  selectedOption,
+  onSelect,
+  onSearchChange,
+  searching = false,
+  emptyMessage = "Nenhum resultado encontrado.",
+  hintText = "Digite para pesquisar na base",
+}) {
+  const [open, setOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [highlightIndex, setHighlightIndex] = useState(0);
+  const containerRef = useRef(null);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target)
+      ) {
+        setOpen(false);
+        setSearchTerm("");
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    setHighlightIndex(0);
+  }, [searchTerm, options.length]);
+
+  function abrirBusca() {
+    setOpen(true);
+    setSearchTerm("");
+    if (onSearchChange) onSearchChange("");
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 0);
+  }
+
+  function handleInputChange(e) {
+    const novoTermo = e.target.value;
+    setSearchTerm(novoTermo);
+    if (!open) setOpen(true);
+    if (onSearchChange) onSearchChange(novoTermo);
+  }
+
+  function selecionarItem(item) {
+    onSelect(item ? item.value : "");
+    setOpen(false);
+    setSearchTerm("");
+  }
+
+  function handleKeyDown(e) {
+    if (!open) {
+      if (e.key === "ArrowDown" || e.key === "Enter") {
+        e.preventDefault();
+        abrirBusca();
+      }
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightIndex((prev) =>
+        options.length > 0 ? (prev + 1) % options.length : 0
+      );
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightIndex((prev) =>
+        options.length > 0
+          ? (prev - 1 + options.length) % options.length
+          : 0
+      );
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (options[highlightIndex]) {
+        selecionarItem(options[highlightIndex]);
+      }
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setOpen(false);
+      setSearchTerm("");
+    }
+  }
+
+  return (
+    <div className="patient-field doctor-combobox" ref={containerRef}>
+      <label className="doctor-combobox-label" htmlFor={id}>
+        {label}
+      </label>
+
+      <div
+        className={`doctor-combobox-control ${
+          open ? "doctor-combobox-control-open" : ""
+        }`}
+      >
+        <span className="doctor-combobox-icon" aria-hidden="true">
+          ⌕
+        </span>
+
+        {open || !selectedOption ? (
+          <input
+            ref={inputRef}
+            id={id}
+            type="text"
+            autoComplete="off"
+            className="doctor-combobox-input"
+            placeholder={
+              selectedOption ? selectedOption.label : placeholder
+            }
+            value={searchTerm}
+            onFocus={() => {
+              if (!open) {
+                setOpen(true);
+                if (onSearchChange) onSearchChange(searchTerm);
+              }
+            }}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+          />
+        ) : (
+          <button
+            type="button"
+            id={id}
+            className="doctor-combobox-selected-btn"
+            onClick={abrirBusca}
+            title="Clique para pesquisar outro registro"
+          >
+            <span className="doctor-combobox-selected-name">
+              {selectedOption.label}
+            </span>
+            {selectedOption.badge && (
+              <span className="doctor-combobox-selected-meta">
+                {selectedOption.badge}
+              </span>
+            )}
+          </button>
+        )}
+
+        {value && (
+          <button
+            type="button"
+            className="doctor-combobox-clear"
+            aria-label={`Limpar ${label}`}
+            title="Limpar seleção"
+            onClick={(e) => {
+              e.stopPropagation();
+              selecionarItem(null);
+              abrirBusca();
+            }}
+          >
+            ✕
+          </button>
+        )}
+
+        <button
+          type="button"
+          className="doctor-combobox-toggle"
+          aria-label={`Abrir lista de ${label}`}
+          onClick={() => (open ? setOpen(false) : abrirBusca())}
+        >
+          ▾
+        </button>
+      </div>
+
+      {open && (
+        <div className="doctor-combobox-dropdown" role="listbox">
+          <div className="doctor-combobox-status">
+            <span>
+              {searching
+                ? "Pesquisando na base de dados..."
+                : `${options.length} resultado(s) exibido(s)`}
+            </span>
+            <small>{hintText}</small>
+          </div>
+
+          {options.length === 0 ? (
+            <div className="doctor-combobox-empty">
+              {searching ? "Carregando..." : emptyMessage}
+            </div>
+          ) : (
+            <ul className="doctor-combobox-list">
+              {options.map((item, idx) => {
+                const isSelected = String(item.value) === String(value);
+                const isHighlighted = idx === highlightIndex;
+                return (
+                  <li key={item.value}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={isSelected}
+                      className={`doctor-combobox-option ${
+                        isHighlighted ? "doctor-combobox-option-active" : ""
+                      } ${isSelected ? "doctor-combobox-option-selected" : ""}`}
+                      onMouseEnter={() => setHighlightIndex(idx)}
+                      onClick={() => selecionarItem(item)}
+                    >
+                      <span
+                        className="doctor-combobox-avatar"
+                        aria-hidden="true"
+                      >
+                        {item.initials}
+                      </span>
+                      <span className="doctor-combobox-option-copy">
+                        <strong>{item.label}</strong>
+                        {item.subtitle && <small>{item.subtitle}</small>}
+                      </span>
+                      {isSelected && (
+                        <span
+                          className="doctor-combobox-check"
+                          aria-hidden="true"
+                        >
+                          ✓
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function indexarPaciente(mapa, paciente) {
@@ -175,6 +423,11 @@ export default function Agenda() {
   const [pacientesMap, setPacientesMap] = useState({});
   const [pacientesLista, setPacientesLista] = useState([]);
   const [profissionaisLista, setProfissionaisLista] = useState([]);
+  const [buscaPacienteForm, setBuscaPacienteForm] = useState("");
+  const [buscandoPacientesServer, setBuscandoPacientesServer] = useState(false);
+  const [buscaProfissionalForm, setBuscaProfissionalForm] = useState("");
+  const [buscandoProfissionaisServer, setBuscandoProfissionaisServer] =
+    useState(false);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("Todas");
   const [loading, setLoading] = useState(true);
@@ -317,6 +570,208 @@ export default function Agenda() {
       ativo = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!showForm) return;
+    const termo = buscaPacienteForm.trim();
+    const timer = setTimeout(async () => {
+      setBuscandoPacientesServer(true);
+      try {
+        const params = new URLSearchParams({
+          ativo: "true",
+          limit: "25",
+          ...(termo ? { busca: termo } : {}),
+        });
+        const resp = await fetchComSessao(
+          `${API_URL}/api/v1/pacientes?${params.toString()}`
+        );
+        if (resp.ok) {
+          const dados = await resp.json();
+          const lista = Array.isArray(dados)
+            ? dados
+            : Array.isArray(dados?.items)
+              ? dados.items
+              : [];
+          const ativos = lista.filter((p) => p?.ativo !== false);
+          setPacientesLista((prev) => {
+            const porId = new Map();
+            for (const item of [...ativos, ...prev]) {
+              if (item?.id) porId.set(String(item.id), item);
+            }
+            return Array.from(porId.values());
+          });
+          const novoMapa = {};
+          for (const p of lista) indexarPaciente(novoMapa, p);
+          if (Object.keys(novoMapa).length > 0) {
+            setPacientesMap((prev) => ({ ...prev, ...novoMapa }));
+          }
+        }
+      } catch {
+        /* mantém cache local */
+      } finally {
+        setBuscandoPacientesServer(false);
+      }
+    }, 220);
+
+    return () => clearTimeout(timer);
+  }, [buscaPacienteForm, showForm]);
+
+  useEffect(() => {
+    if (!showForm) return;
+    const termo = buscaProfissionalForm.trim();
+    if (!termo) return;
+    const timer = setTimeout(async () => {
+      setBuscandoProfissionaisServer(true);
+      try {
+        const dadosProf = await listarProfissionais({
+          ativo: true,
+          nome: termo,
+        });
+        const lista = Array.isArray(dadosProf) ? dadosProf : [];
+        if (lista.length > 0) {
+          setProfissionaisLista((prev) => {
+            const existentes = [...prev];
+            for (const prof of lista) {
+              const jaExiste = existentes.some(
+                (p) => String(p.id) === String(prof.id)
+              );
+              if (!jaExiste) {
+                existentes.push({
+                  ...prof,
+                  uuid: resolverUuidProfissional(
+                    prof,
+                    existentes.length,
+                    usuarioAtual
+                  ),
+                });
+              }
+            }
+            return existentes;
+          });
+        }
+      } catch {
+        /* mantém cache local */
+      } finally {
+        setBuscandoProfissionaisServer(false);
+      }
+    }, 220);
+
+    return () => clearTimeout(timer);
+  }, [buscaProfissionalForm, showForm, usuarioAtual]);
+
+  const opcoesPacientes = useMemo(() => {
+    const termoNorm = normalizarTexto(buscaPacienteForm);
+    const digitosBusca = buscaPacienteForm.replace(/\D/g, "");
+
+    return pacientesLista
+      .filter((pac) => {
+        if (!termoNorm && !digitosBusca) return true;
+        const nome = normalizarTexto(obterNomePaciente(pac));
+        const cpf = String(pac?.cpf || "").replace(/\D/g, "");
+        const email = normalizarTexto(pac?.email || "");
+        return (
+          (termoNorm && (nome.includes(termoNorm) || email.includes(termoNorm))) ||
+          (digitosBusca && cpf.includes(digitosBusca))
+        );
+      })
+      .sort((a, b) =>
+        obterNomePaciente(a).localeCompare(obterNomePaciente(b), "pt-BR")
+      )
+      .slice(0, 25)
+      .map((pac) => {
+        const nome = obterNomePaciente(pac);
+        const cpfFmt = formatarCpf(pac?.cpf);
+        return {
+          value: String(pac.id),
+          label: nome,
+          initials: initialsFromName(nome),
+          badge: cpfFmt ? `CPF ${cpfFmt}` : "",
+          subtitle: [
+            cpfFmt ? `CPF: ${cpfFmt}` : null,
+            pac?.telefone_principal || null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        };
+      });
+  }, [pacientesLista, buscaPacienteForm]);
+
+  const pacienteSelecionadoOption = useMemo(() => {
+    if (!formData.paciente_id) return null;
+    const daLista = opcoesPacientes.find(
+      (o) => String(o.value) === String(formData.paciente_id)
+    );
+    if (daLista) return daLista;
+    const pac =
+      pacientesMap[String(formData.paciente_id).toLowerCase()] ||
+      pacientesLista.find((p) => String(p.id) === String(formData.paciente_id));
+    if (!pac) return null;
+    const nome = obterNomePaciente(pac);
+    const cpfFmt = formatarCpf(pac?.cpf);
+    return {
+      value: String(pac.id),
+      label: nome,
+      initials: initialsFromName(nome),
+      badge: cpfFmt ? `CPF ${cpfFmt}` : "",
+    };
+  }, [formData.paciente_id, opcoesPacientes, pacientesMap, pacientesLista]);
+
+  const opcoesProfissionais = useMemo(() => {
+    const termoNorm = normalizarTexto(buscaProfissionalForm);
+
+    return profissionaisLista
+      .filter((prof) => {
+        if (!termoNorm) return true;
+        const nome = normalizarTexto(prof?.nome);
+        const doc = normalizarTexto(prof?.documento_registro);
+        const esps = Array.isArray(prof?.especialidades)
+          ? prof.especialidades
+              .map((e) => normalizarTexto(e?.nome))
+              .join(" ")
+          : "";
+        return (
+          nome.includes(termoNorm) ||
+          doc.includes(termoNorm) ||
+          esps.includes(termoNorm)
+        );
+      })
+      .slice(0, 25)
+      .map((prof) => {
+        const valorUuid = prof.uuid || String(prof.id);
+        const espNome = prof?.especialidades?.[0]?.nome || null;
+        return {
+          value: valorUuid,
+          label: prof.nome,
+          initials: initialsFromName(prof.nome),
+          badge: espNome || prof.documento_registro || "",
+          subtitle: [
+            espNome,
+            prof.documento_registro ? `Reg.: ${prof.documento_registro}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        };
+      });
+  }, [profissionaisLista, buscaProfissionalForm]);
+
+  const profissionalSelecionadoOption = useMemo(() => {
+    if (!formData.profissional_id) return null;
+    const daLista = opcoesProfissionais.find(
+      (o) => String(o.value) === String(formData.profissional_id)
+    );
+    if (daLista) return daLista;
+    const prof = profissionaisLista.find(
+      (p) =>
+        String(p.uuid || p.id) === String(formData.profissional_id)
+    );
+    if (!prof) return null;
+    return {
+      value: prof.uuid || String(prof.id),
+      label: prof.nome,
+      initials: initialsFromName(prof.nome),
+      badge: prof?.especialidades?.[0]?.nome || prof.documento_registro || "",
+    };
+  }, [formData.profissional_id, opcoesProfissionais, profissionaisLista]);
 
   const profissionaisMap = useMemo(() => {
     const mapa = {};
@@ -902,46 +1357,37 @@ export default function Agenda() {
               onSubmit={handleSubmitAppointment}
             >
               <div className="patient-grid patient-grid-personal">
-                <label className="patient-field">
-                  <span>Paciente</span>
-                  <select
-                    name="paciente_id"
-                    value={formData.paciente_id}
-                    onChange={handleFormChange}
-                    required
-                  >
-                    <option value="">
-                      {pacientesLista.length > 0
-                        ? "Selecione o paciente..."
-                        : "Nenhum paciente cadastrado"}
-                    </option>
-                    {pacientesLista.map((pac) => (
-                      <option key={pac.id} value={pac.id}>
-                        {obterNomePaciente(pac)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <SearchableCombobox
+                  id="agenda-select-paciente"
+                  label="Paciente"
+                  placeholder="Pesquisar paciente por nome ou CPF..."
+                  value={formData.paciente_id}
+                  options={opcoesPacientes}
+                  selectedOption={pacienteSelecionadoOption}
+                  searching={buscandoPacientesServer}
+                  hintText="Busque por nome ou CPF"
+                  emptyMessage="Nenhum paciente encontrado com esse termo."
+                  onSearchChange={setBuscaPacienteForm}
+                  onSelect={(val) =>
+                    setFormData((curr) => ({ ...curr, paciente_id: val }))
+                  }
+                />
 
-                <label className="patient-field">
-                  <span>Profissional</span>
-                  <select
-                    name="profissional_id"
-                    value={formData.profissional_id}
-                    onChange={handleFormChange}
-                    required
-                  >
-                    <option value="">Selecione o profissional...</option>
-                    {profissionaisLista.map((prof) => {
-                      const valorUuid = prof.uuid || String(prof.id);
-                      return (
-                        <option key={valorUuid} value={valorUuid}>
-                          {prof.nome}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </label>
+                <SearchableCombobox
+                  id="agenda-select-profissional"
+                  label="Profissional"
+                  placeholder="Pesquisar por nome, registro ou especialidade..."
+                  value={formData.profissional_id}
+                  options={opcoesProfissionais}
+                  selectedOption={profissionalSelecionadoOption}
+                  searching={buscandoProfissionaisServer}
+                  hintText="Nome, CRM/CRFa ou especialidade"
+                  emptyMessage="Nenhum profissional encontrado com esse termo."
+                  onSearchChange={setBuscaProfissionalForm}
+                  onSelect={(val) =>
+                    setFormData((curr) => ({ ...curr, profissional_id: val }))
+                  }
+                />
 
                 <label className="patient-field">
                   <span>Modalidade</span>
