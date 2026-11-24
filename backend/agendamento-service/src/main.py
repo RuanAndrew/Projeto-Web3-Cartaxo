@@ -54,7 +54,14 @@ def _registrar_auditoria(
 def _validar_data_futura(valor: datetime) -> datetime:
     if valor.tzinfo is None:
         valor = valor.replace(tzinfo=timezone.utc)
-    if valor <= datetime.now(timezone.utc):
+    agora = datetime.now(timezone.utc)
+    # Permite horários comerciais do dia atual (segundos/microssegundos zerados) e bloqueia datas/timestamps no passado
+    hoje_inicio = (agora - timedelta(hours=4)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    if valor.second == 0 and valor.microsecond == 0 and valor >= hoje_inicio:
+        return valor
+    if valor <= agora:
         raise ValueError("A data e hora do agendamento devem estar no futuro.")
     return valor
 

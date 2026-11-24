@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import Btn from "../../components/Btn.jsx";
+import SearchableCombobox, {
+  gerarSlotsComerciais,
+  iniciaisDeNome,
+  normalizarTextoBusca,
+} from "../../components/SearchableCombobox.jsx";
 import { useToast } from "../../components/ToastProvider.jsx";
 import {
   DIAS_SEMANA,
   adicionarDisponibilidade,
-  atualizarDisponibilidade,
   buscarHorariosDisponiveis,
   diaSemanaDeData,
   formatDataBR,
@@ -20,40 +24,133 @@ import {
   removerDisponibilidade,
   somarDiasIso,
 } from "../../services/profissionaisApi.js";
+import {
+  garantirSessaoValida,
+  obterToken,
+  removerToken,
+} from "../../utils/auth.js";
+
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:8000"
+).replace(/\/$/, "");
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const PROFISSIONAL_UUID_PADRAO = "119d0caf-2b76-4782-85a5-65937af47356";
 
 const LABEL_POR_DIA = Object.fromEntries(
   DIAS_SEMANA.map((d) => [d.value, d.label])
 );
 
-const TURNOS_RAPIDOS = [
-  { label: "Manhã (08h–12h)", inicio: "08:00", fim: "12:00" },
-  { label: "Tarde (13h–17h)", inicio: "13:00", fim: "17:00" },
-  { label: "Integral (08h–18h)", inicio: "08:00", fim: "18:00" },
-];
+function resolverUuidProfissional(prof, index = 0) {
+  const idStr = String(prof?.id || "").trim();
+  if (UUID_REGEX.test(idStr)) return idStr;
+  if (index === 0) return PROFISSIONAL_UUID_PADRAO;
+  const sufixo =
+    idStr.replace(/\D/g, "").padStart(12, "0").slice(-12) ||
+    String(index + 1).padStart(12, "0");
+  return `00000000-0000-4000-8000-${sufixo}`;
+}
+
+function obterNomePaciente(pac) {
+  return String(pac?.nome_completo || pac?.nome || "").trim();
+}
+
+function formatarCpf(cpf = "") {
+  const digitos = String(cpf || "").replace(/\D/g, "");
+  if (digitos.length !== 11) return "";
+  return digitos.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+}
+
+function horarioParaMinutos(horaStr = "") {
+  const [h, m] = String(horaStr).slice(0, 5).split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return 0;
+  return h * 60 + m;
+}
+
+function extrairDataLocalIso(isoDateTime) {
+  if (!isoDateTime) return "";
+  const d = new Date(isoDateTime);
+  if (Number.isNaN(d.getTime())) return "";
+  const ano = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+}
+
+function extrairHoraLocal(isoDateTime) {
+  if (!isoDateTime) return "";
+  const d = new Date(isoDateTime);
+  if (Number.isNaN(d.getTime())) return "";
+  const h = String(d.getHours()).padStart(2, "0");
+  const m = String(d.getMinutes()).padStart(2, "0");
+  return `${h}:${m}`;
+}
+
+async function fetchComSessao(url, options = {}) {
+  let token = obterToken() || (await garantirSessaoValida());
+  const montarHeaders = (t) => ({
+    ...(options.headers || {}),
+    ...(t ? { Authorization: `Bearer ${t}` } : {}),
+  });
+
+  let response = await fetch(url, {
+    ...options,
+    headers: montarHeaders(token),
+  });
+
+  if (response.status === 401) {
+    removerToken();
+    token = await garantirSessaoValida();
+    if (token) {
+      response = await fetch(url, {
+        ...options,
+        headers: montarHeaders(token),
+      });
+    }
+  }
+
+  return response;
+}
 
 export default function AgendaConfigAdmin() {
   const { showToast } = useToast();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [profissionais, setProfissionais] = useState([]);
   const [especialidades, setEspecialidades] = useState([]);
+  const [pacientesLista, setPacientesLista] = useState([]);
+  const [pacientesMap, setPacientesMap] = useState({});
+  const [agendamentosClinica, setAgendamentosClinica] = useState([]);
+
   const [profissionalId, setProfissionalId] = useState(
     searchParams.get("profissional") || ""
   );
+  const [pacienteId, setPacienteId] = useState("");
+  const [modalidade, setModalidade] = useState("presencial");
+
+  // Busca de profissionais e pacientes para 10.000+ registros
+  const [termoBuscaProfForm, setTermoBuscaProfForm] = useState("");
+  const [buscandoProfFormServer, setBuscandoProfFormServer] = useState(false);
+  const [termoBuscaPacienteForm, setTermoBuscaPacienteForm] = useState("");
+  const [buscandoPacienteServer, setBuscandoPacienteServer] = useState(false);
+  const [termoBuscaProfFiltro, setTermoBuscaProfFiltro] = useState("");
+  const [buscandoProfFiltroServer, setBuscandoProfFiltroServer] =
+    useState(false);
 
   // Disponibilidades do profissional selecionado (UC07)
   const [disponibilidades, setDisponibilidades] = useState([]);
-  const [loadingAgenda, setLoadingAgenda] = useState(false);
 
-  // Formulário de horário e data de atendimento
+  // Formulário de horário com duração fixa (15 ou 20 min) no horário comercial (08:00–17:00)
   const dataInicial = useMemo(() => hojeIso(), []);
-  const [editandoSlotId, setEditandoSlotId] = useState(null);
   const [dataAtendimento, setDataAtendimento] = useState(dataInicial);
   const [diaSemana, setDiaSemana] = useState(() =>
     diaSemanaDeData(dataInicial)
   );
-  const [horarioInicio, setHorarioInicio] = useState("08:00");
-  const [horarioFim, setHorarioFim] = useState("12:00");
+  const [duracaoMinutos, setDuracaoMinutos] = useState(15);
+  const [slotsSelecionados, setSlotsSelecionados] = useState(["08:00-08:15"]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -65,31 +162,190 @@ export default function AgendaConfigAdmin() {
   const [resultadosBusca, setResultadosBusca] = useState([]);
   const [loadingBusca, setLoadingBusca] = useState(false);
 
+  const carregarPacientesIniciais = useCallback(async () => {
+    try {
+      const resp = await fetchComSessao(
+        `${API_URL}/api/v1/pacientes?ativo=true&limit=100`
+      );
+      if (!resp.ok) return;
+      const dados = await resp.json();
+      const lista = Array.isArray(dados)
+        ? dados
+        : Array.isArray(dados?.items)
+          ? dados.items
+          : [];
+      setPacientesLista(lista.filter((p) => p?.ativo !== false));
+      const mapa = {};
+      for (const p of lista) {
+        if (p?.id) mapa[String(p.id).toLowerCase()] = p;
+        if (p?.user_account_id)
+          mapa[String(p.user_account_id).toLowerCase()] = p;
+      }
+      setPacientesMap((prev) => ({ ...prev, ...mapa }));
+    } catch {
+      /* ignora se offline */
+    }
+  }, []);
+
+  const carregarAgendamentosClinica = useCallback(async () => {
+    try {
+      const resp = await fetchComSessao(`${API_URL}/agendamentos`);
+      if (!resp.ok) return;
+      const dados = await resp.json();
+      if (Array.isArray(dados)) {
+        setAgendamentosClinica(dados);
+      }
+    } catch {
+      /* ignora se offline */
+    }
+  }, []);
+
   useEffect(() => {
-    Promise.all([listarProfissionais(), listarEspecialidades()])
+    Promise.all([
+      listarProfissionais(),
+      listarEspecialidades(),
+      carregarPacientesIniciais(),
+      carregarAgendamentosClinica(),
+    ])
       .then(([profs, esps]) => {
-        setProfissionais(profs);
-        setEspecialidades(esps);
-        if (!profissionalId && profs.length > 0) {
-          setProfissionalId(String(profs[0].id));
+        const listaProfs = (Array.isArray(profs) ? profs : []).map(
+          (p, idx) => ({
+            ...p,
+            uuid: resolverUuidProfissional(p, idx),
+          })
+        );
+        setProfissionais(listaProfs);
+        setEspecialidades(Array.isArray(esps) ? esps : []);
+        if (!profissionalId && listaProfs.length > 0) {
+          setProfissionalId(String(listaProfs[0].id));
         }
       })
       .catch((err) => setError(err.message));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Busca sob demanda de Pacientes no servidor (10.000+ pacientes por Nome ou CPF)
+  useEffect(() => {
+    const termo = termoBuscaPacienteForm.trim();
+    const timer = setTimeout(async () => {
+      setBuscandoPacienteServer(true);
+      try {
+        const params = new URLSearchParams({
+          ativo: "true",
+          limit: "25",
+          ...(termo ? { busca: termo } : {}),
+        });
+        const resp = await fetchComSessao(
+          `${API_URL}/api/v1/pacientes?${params.toString()}`
+        );
+        if (resp.ok) {
+          const dados = await resp.json();
+          const lista = Array.isArray(dados)
+            ? dados
+            : Array.isArray(dados?.items)
+              ? dados.items
+              : [];
+          const ativos = lista.filter((p) => p?.ativo !== false);
+          setPacientesLista((prev) => {
+            const porId = new Map();
+            for (const item of [...ativos, ...prev]) {
+              if (item?.id) porId.set(String(item.id), item);
+            }
+            return Array.from(porId.values());
+          });
+          const novoMapa = {};
+          for (const p of lista) {
+            if (p?.id) novoMapa[String(p.id).toLowerCase()] = p;
+            if (p?.user_account_id)
+              novoMapa[String(p.user_account_id).toLowerCase()] = p;
+          }
+          if (Object.keys(novoMapa).length > 0) {
+            setPacientesMap((prev) => ({ ...prev, ...novoMapa }));
+          }
+        }
+      } catch {
+        /* mantém cache */
+      } finally {
+        setBuscandoPacienteServer(false);
+      }
+    }, 220);
+    return () => clearTimeout(timer);
+  }, [termoBuscaPacienteForm]);
+
+  // Busca sob demanda de Profissionais no servidor (formulário)
+  useEffect(() => {
+    const termo = termoBuscaProfForm.trim();
+    if (!termo) return;
+    const timer = setTimeout(async () => {
+      setBuscandoProfFormServer(true);
+      try {
+        const encontrados = await listarProfissionais({ nome: termo });
+        if (Array.isArray(encontrados) && encontrados.length > 0) {
+          setProfissionais((atuais) => {
+            const existentes = [...atuais];
+            for (const p of encontrados) {
+              if (!existentes.some((item) => String(item.id) === String(p.id))) {
+                existentes.push({
+                  ...p,
+                  uuid: resolverUuidProfissional(p, existentes.length),
+                });
+              }
+            }
+            return existentes;
+          });
+        }
+      } catch {
+        /* mantém lista em cache */
+      } finally {
+        setBuscandoProfFormServer(false);
+      }
+    }, 220);
+    return () => clearTimeout(timer);
+  }, [termoBuscaProfForm]);
+
+  // Busca sob demanda de Profissionais no servidor (filtro UC08)
+  useEffect(() => {
+    const termo = termoBuscaProfFiltro.trim();
+    if (!termo) return;
+    const timer = setTimeout(async () => {
+      setBuscandoProfFiltroServer(true);
+      try {
+        const encontrados = await listarProfissionais({
+          nome: termo,
+          ativo: true,
+        });
+        if (Array.isArray(encontrados) && encontrados.length > 0) {
+          setProfissionais((atuais) => {
+            const existentes = [...atuais];
+            for (const p of encontrados) {
+              if (!existentes.some((item) => String(item.id) === String(p.id))) {
+                existentes.push({
+                  ...p,
+                  uuid: resolverUuidProfissional(p, existentes.length),
+                });
+              }
+            }
+            return existentes;
+          });
+        }
+      } catch {
+        /* mantém lista em cache */
+      } finally {
+        setBuscandoProfFiltroServer(false);
+      }
+    }, 220);
+    return () => clearTimeout(timer);
+  }, [termoBuscaProfFiltro]);
 
   const carregarAgenda = useCallback(async (id) => {
     if (!id) {
       setDisponibilidades([]);
       return;
     }
-    setLoadingAgenda(true);
     try {
       const lista = await listarDisponibilidades(id);
-      setDisponibilidades(lista);
+      setDisponibilidades(Array.isArray(lista) ? lista : []);
     } catch (err) {
       setError(err.message);
-    } finally {
-      setLoadingAgenda(false);
     }
   }, []);
 
@@ -102,7 +358,7 @@ export default function AgendaConfigAdmin() {
         dia_semana: buscaDia || undefined,
         data_atendimento: buscaData || undefined,
       });
-      setResultadosBusca(res);
+      setResultadosBusca(Array.isArray(res) ? res : []);
     } catch (err) {
       showToast(err.message);
     } finally {
@@ -124,25 +380,295 @@ export default function AgendaConfigAdmin() {
     executarBusca();
   }, [executarBusca]);
 
-  const profissionalAtual = useMemo(
-    () =>
-      profissionais.find((p) => String(p.id) === String(profissionalId)) ||
-      null,
-    [profissionais, profissionalId]
+  const profissionalAtual = useMemo(() => {
+    const idx = profissionais.findIndex(
+      (p) => String(p.id) === String(profissionalId)
+    );
+    if (idx === -1) return null;
+    const p = profissionais[idx];
+    return {
+      ...p,
+      uuid: p.uuid || resolverUuidProfissional(p, idx),
+    };
+  }, [profissionais, profissionalId]);
+
+  // Opções para combobox de Profissional
+  const opcoesProfissionaisForm = useMemo(() => {
+    const termo = normalizarTextoBusca(termoBuscaProfForm);
+    return profissionais
+      .filter((prof) => {
+        if (!termo) return true;
+        const nome = normalizarTextoBusca(prof.nome);
+        const doc = normalizarTextoBusca(prof.documento_registro);
+        const esps = (prof.especialidades || [])
+          .map((e) => normalizarTextoBusca(e.nome))
+          .join(" ");
+        return (
+          nome.includes(termo) || doc.includes(termo) || esps.includes(termo)
+        );
+      })
+      .slice(0, 25)
+      .map((prof) => {
+        const espPrincipal = prof.especialidades?.[0]?.nome || "";
+        return {
+          value: String(prof.id),
+          label: prof.nome,
+          initials: iniciaisDeNome(prof.nome),
+          badge: prof.ativo ? prof.documento_registro : "Inativo",
+          subtitle: [
+            espPrincipal,
+            `Reg.: ${prof.documento_registro}`,
+            !prof.ativo ? "Inativo" : null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        };
+      });
+  }, [profissionais, termoBuscaProfForm]);
+
+  const profissionalFormSelecionado = useMemo(() => {
+    if (!profissionalId) return null;
+    return (
+      opcoesProfissionaisForm.find(
+        (o) => String(o.value) === String(profissionalId)
+      ) ||
+      (profissionalAtual
+        ? {
+            value: String(profissionalAtual.id),
+            label: profissionalAtual.nome,
+            initials: iniciaisDeNome(profissionalAtual.nome),
+            badge: profissionalAtual.documento_registro,
+          }
+        : null)
+    );
+  }, [profissionalId, opcoesProfissionaisForm, profissionalAtual]);
+
+  // Opções para combobox de Paciente (10.000+ pacientes por Nome ou CPF)
+  const opcoesPacientesForm = useMemo(() => {
+    const termo = normalizarTextoBusca(termoBuscaPacienteForm);
+    const digitos = termoBuscaPacienteForm.replace(/\D/g, "");
+
+    return pacientesLista
+      .filter((pac) => {
+        if (!termo && !digitos) return true;
+        const nome = normalizarTextoBusca(obterNomePaciente(pac));
+        const cpf = String(pac?.cpf || "").replace(/\D/g, "");
+        const email = normalizarTextoBusca(pac?.email || "");
+        return (
+          (termo && (nome.includes(termo) || email.includes(termo))) ||
+          (digitos && cpf.includes(digitos))
+        );
+      })
+      .sort((a, b) =>
+        obterNomePaciente(a).localeCompare(obterNomePaciente(b), "pt-BR")
+      )
+      .slice(0, 25)
+      .map((pac) => {
+        const nome = obterNomePaciente(pac);
+        const cpfFmt = formatarCpf(pac?.cpf);
+        return {
+          value: String(pac.id),
+          label: nome,
+          initials: iniciaisDeNome(nome),
+          badge: cpfFmt ? `CPF ${cpfFmt}` : "",
+          subtitle: [
+            cpfFmt ? `CPF: ${cpfFmt}` : null,
+            pac?.telefone_principal || null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        };
+      });
+  }, [pacientesLista, termoBuscaPacienteForm]);
+
+  const pacienteFormSelecionado = useMemo(() => {
+    if (!pacienteId) return null;
+    const daOpcao = opcoesPacientesForm.find(
+      (o) => String(o.value) === String(pacienteId)
+    );
+    if (daOpcao) return daOpcao;
+    const pac =
+      pacientesMap[String(pacienteId).toLowerCase()] ||
+      pacientesLista.find((p) => String(p.id) === String(pacienteId));
+    if (!pac) return null;
+    const nome = obterNomePaciente(pac);
+    const cpfFmt = formatarCpf(pac?.cpf);
+    return {
+      value: String(pac.id),
+      label: nome,
+      initials: iniciaisDeNome(nome),
+      badge: cpfFmt ? `CPF ${cpfFmt}` : "",
+    };
+  }, [pacienteId, opcoesPacientesForm, pacientesMap, pacientesLista]);
+
+  // Opções para combobox de Profissional Ativo (Filtro UC08)
+  const opcoesProfissionaisFiltro = useMemo(() => {
+    const termo = normalizarTextoBusca(termoBuscaProfFiltro);
+    return profissionais
+      .filter((p) => p.ativo)
+      .filter((prof) => {
+        if (!termo) return true;
+        const nome = normalizarTextoBusca(prof.nome);
+        const doc = normalizarTextoBusca(prof.documento_registro);
+        const esps = (prof.especialidades || [])
+          .map((e) => normalizarTextoBusca(e.nome))
+          .join(" ");
+        return (
+          nome.includes(termo) || doc.includes(termo) || esps.includes(termo)
+        );
+      })
+      .slice(0, 25)
+      .map((prof) => {
+        const espPrincipal = prof.especialidades?.[0]?.nome || "";
+        return {
+          value: String(prof.id),
+          label: prof.nome,
+          initials: iniciaisDeNome(prof.nome),
+          badge: espPrincipal || prof.documento_registro,
+          subtitle: [espPrincipal, `Reg.: ${prof.documento_registro}`]
+            .filter(Boolean)
+            .join(" · "),
+        };
+      });
+  }, [profissionais, termoBuscaProfFiltro]);
+
+  const profissionalFiltroSelecionado = useMemo(() => {
+    if (!buscaProfissionalId) return null;
+    return (
+      opcoesProfissionaisFiltro.find(
+        (o) => String(o.value) === String(buscaProfissionalId)
+      ) || null
+    );
+  }, [buscaProfissionalId, opcoesProfissionaisFiltro]);
+
+  // Slots comerciais (08:00 às 17:00) de 15 ou 20 min
+  const catalogoSlotsComerciais = useMemo(
+    () => gerarSlotsComerciais(duracaoMinutos),
+    [duracaoMinutos]
   );
 
-  const porDia = useMemo(() => {
-    const mapa = Object.fromEntries(DIAS_SEMANA.map((d) => [d.value, []]));
-    disponibilidades.forEach((slot) => {
-      mapa[slot.dia_semana]?.push(slot);
+  // Consultas reais do médico (agendamento-service) para exibir na grade e sincronizar com a Agenda do Médico
+  const agendamentosDoMedico = useMemo(() => {
+    if (!profissionalAtual?.uuid) return [];
+    const uuidAlvo = String(profissionalAtual.uuid).toLowerCase();
+    return agendamentosClinica.filter(
+      (apt) =>
+        String(apt.profissional_id || "").toLowerCase() === uuidAlvo &&
+        apt.status !== "cancelado" &&
+        apt.status !== "nao_compareceu"
+    );
+  }, [agendamentosClinica, profissionalAtual]);
+
+  // Verifica quais horários da data selecionada já possuem consulta marcada (agendamento-service) ou disponibilidade (ms-profissionais)
+  const mapaSlotsOcupadosNoDia = useMemo(() => {
+    const diaAlvo = dataAtendimento
+      ? diaSemanaDeData(dataAtendimento)
+      : diaSemana;
+
+    const dispNoDia = disponibilidades.filter((slot) => {
+      if (slot.dia_semana !== diaAlvo) return false;
+      if (!dataAtendimento || !slot.data_atendimento) return true;
+      return slot.data_atendimento === dataAtendimento;
     });
+
+    const consultasNoDia = dataAtendimento
+      ? agendamentosDoMedico.filter(
+          (apt) => extrairDataLocalIso(apt.data_hora) === dataAtendimento
+        )
+      : [];
+
+    const mapa = new Map();
+    for (const item of catalogoSlotsComerciais) {
+      const iniNovo = horarioParaMinutos(item.inicio);
+      const fimNovo = horarioParaMinutos(item.fim);
+
+      const consultaConflitante = consultasNoDia.find((apt) => {
+        const horaIni = extrairHoraLocal(apt.data_hora);
+        const iniExist = horarioParaMinutos(horaIni);
+        const fimExist = iniExist + (Number(apt.duracao_minutos) || 30);
+        return iniNovo < fimExist && fimNovo > iniExist;
+      });
+
+      const dispConflitante = dispNoDia.find((s) => {
+        const iniExist = horarioParaMinutos(formatHora(s.horario_inicio));
+        const fimExist = horarioParaMinutos(formatHora(s.horario_fim));
+        return iniNovo < fimExist && fimNovo > iniExist;
+      });
+
+      if (consultaConflitante || dispConflitante) {
+        const pac = consultaConflitante
+          ? pacientesMap[
+              String(consultaConflitante.paciente_id || "").toLowerCase()
+            ]
+          : null;
+        mapa.set(item.key, {
+          consulta: consultaConflitante || null,
+          disponibilidade: dispConflitante || null,
+          pacienteNome: obterNomePaciente(pac) || null,
+        });
+      }
+    }
     return mapa;
-  }, [disponibilidades]);
+  }, [
+    catalogoSlotsComerciais,
+    disponibilidades,
+    agendamentosDoMedico,
+    pacientesMap,
+    dataAtendimento,
+    diaSemana,
+  ]);
+
+  const slotsManha = useMemo(
+    () => catalogoSlotsComerciais.filter((s) => s.turno === "MANHA"),
+    [catalogoSlotsComerciais]
+  );
+
+  const slotsTarde = useMemo(
+    () => catalogoSlotsComerciais.filter((s) => s.turno === "TARDE"),
+    [catalogoSlotsComerciais]
+  );
+
+  function handleTrocarDuracao(novaDuracao) {
+    setDuracaoMinutos(novaDuracao);
+    const novosSlots = gerarSlotsComerciais(novaDuracao);
+    const primeiroLivre =
+      novosSlots.find((s) => !mapaSlotsOcupadosNoDia.has(s.key)) ||
+      novosSlots[0];
+    setSlotsSelecionados(primeiroLivre ? [primeiroLivre.key] : []);
+  }
+
+  function toggleSlotComercial(slotKey) {
+    if (mapaSlotsOcupadosNoDia.has(slotKey)) return;
+    setSlotsSelecionados((atuais) =>
+      atuais.includes(slotKey)
+        ? atuais.filter((k) => k !== slotKey)
+        : [...atuais, slotKey]
+    );
+  }
+
+  function selecionarTurnoLivre(turno) {
+    const livres = catalogoSlotsComerciais
+      .filter((s) => s.turno === turno && !mapaSlotsOcupadosNoDia.has(s.key))
+      .map((s) => s.key);
+    if (livres.length === 0) {
+      showToast(
+        "Todos os horários desse turno já estão preenchidos nesta data."
+      );
+      return;
+    }
+    setSlotsSelecionados((atuais) => {
+      const todosJaSelecionados = livres.every((k) => atuais.includes(k));
+      if (todosJaSelecionados) {
+        return atuais.filter((k) => !livres.includes(k));
+      }
+      return Array.from(new Set([...atuais, ...livres]));
+    });
+  }
 
   function selecionarProfissional(novoId) {
     setProfissionalId(novoId);
     setSearchParams(novoId ? { profissional: novoId } : {});
-    cancelarEdicaoSlot();
+    setError("");
   }
 
   function handleChangeDataAtendimento(novaData) {
@@ -154,66 +680,111 @@ export default function AgendaConfigAdmin() {
 
   function handleSelectDiaSemana(novoDia) {
     setDiaSemana(novoDia);
-    if (dataAtendimento) {
-      setDataAtendimento(proximaDataParaDiaSemana(novoDia, hojeIso()));
-    }
+    setDataAtendimento(proximaDataParaDiaSemana(novoDia, hojeIso()));
   }
 
-  function iniciarEdicaoSlot(slot) {
-    setEditandoSlotId(slot.id);
-    setDiaSemana(slot.dia_semana);
-    setDataAtendimento(slot.data_atendimento || "");
-    setHorarioInicio(formatHora(slot.horario_inicio));
-    setHorarioFim(formatHora(slot.horario_fim));
-    setError("");
-  }
-
-  function cancelarEdicaoSlot() {
-    const hoje = hojeIso();
-    setEditandoSlotId(null);
-    setDataAtendimento(hoje);
-    setDiaSemana(diaSemanaDeData(hoje));
-    setHorarioInicio("08:00");
-    setHorarioFim("12:00");
-    setError("");
-  }
-
-  async function handleSubmitSlot(event) {
+  async function handleSubmitAgendamentoRecepcao(event) {
     event.preventDefault();
     setError("");
 
-    if (!profissionalId) {
-      setError("Selecione um profissional antes de adicionar horários.");
+    if (!profissionalId || !profissionalAtual) {
+      setError("Selecione o médico/profissional para o agendamento.");
       return;
     }
 
-    if (!horarioInicio || !horarioFim || horarioFim <= horarioInicio) {
-      setError("O horário de término deve ser posterior ao horário de início.");
+    if (!pacienteId) {
+      setError(
+        "Selecione o paciente que será atendido (ou cadastre um novo em Pacientes)."
+      );
       return;
     }
 
-    const diaFinal = dataAtendimento
-      ? diaSemanaDeData(dataAtendimento)
-      : diaSemana;
+    if (!dataAtendimento) {
+      setError("Selecione a data do atendimento.");
+      return;
+    }
 
-    const payload = {
-      dia_semana: diaFinal,
-      data_atendimento: dataAtendimento || null,
-      horario_inicio: horarioInicio,
-      horario_fim: horarioFim,
-    };
+    const itensEscolhidos = catalogoSlotsComerciais.filter((s) =>
+      slotsSelecionados.includes(s.key)
+    );
+
+    if (itensEscolhidos.length === 0) {
+      setError(
+        "Selecione pelo menos um horário comercial de 15 ou 20 minutos (entre 08:00 e 17:00)."
+      );
+      return;
+    }
+
+    const diaFinal = diaSemanaDeData(dataAtendimento);
+    const profUuid = profissionalAtual.uuid || PROFISSIONAL_UUID_PADRAO;
 
     setSubmitting(true);
     try {
-      if (editandoSlotId !== null) {
-        await atualizarDisponibilidade(editandoSlotId, payload);
-        showToast("Horário de atendimento atualizado.");
-      } else {
-        await adicionarDisponibilidade(profissionalId, payload);
-        showToast("Horário adicionado à agenda do profissional.");
+      let agendados = 0;
+
+      for (const slot of itensEscolhidos) {
+        const dataHoraIso = new Date(
+          `${dataAtendimento}T${slot.inicio}:00`
+        ).toISOString();
+
+        // 1. Cria a consulta real no agendamento-service (para aparecer imediatamente na Agenda do Médico!)
+        const respAgendamento = await fetchComSessao(
+          `${API_URL}/agendamentos`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              paciente_id: pacienteId,
+              profissional_id: profUuid,
+              data_hora: dataHoraIso,
+              duracao_minutos: duracaoMinutos,
+              modalidade,
+            }),
+          }
+        );
+
+        const dadosAgendamento = await respAgendamento.json().catch(() => ({}));
+        if (!respAgendamento.ok) {
+          const detalhe =
+            typeof dadosAgendamento.detail === "string"
+              ? dadosAgendamento.detail
+              : Array.isArray(dadosAgendamento.detail)
+                ? dadosAgendamento.detail
+                    .map((i) => i.msg)
+                    .filter(Boolean)
+                    .join(" ")
+                : "Não foi possível registrar a consulta para o médico.";
+          throw new Error(detalhe);
+        }
+
+        // 2. Registra também o horário no ms-profissionais (mantendo a tabela de disponibilidade sincronizada)
+        try {
+          await adicionarDisponibilidade(profissionalId, {
+            dia_semana: diaFinal,
+            data_atendimento: dataAtendimento,
+            horario_inicio: slot.inicio,
+            horario_fim: slot.fim,
+          });
+        } catch {
+          /* se a faixa já existir no ms-profissionais, mantém o agendamento criado */
+        }
+
+        agendados += 1;
       }
-      cancelarEdicaoSlot();
-      await Promise.all([carregarAgenda(profissionalId), executarBusca()]);
+
+      const nomePac = pacienteFormSelecionado?.label || "Paciente";
+      showToast(
+        agendados === 1
+          ? `Consulta de ${nomePac} agendada para Dr(a). ${profissionalAtual.nome}!`
+          : `${agendados} consultas de ${nomePac} agendadas para Dr(a). ${profissionalAtual.nome}!`
+      );
+
+      setSlotsSelecionados([]);
+      await Promise.all([
+        carregarAgenda(profissionalId),
+        carregarAgendamentosClinica(),
+        executarBusca(),
+      ]);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -221,23 +792,27 @@ export default function AgendaConfigAdmin() {
     }
   }
 
-  async function handleRemoverSlot(slot) {
+  async function handleLiberarHorarioOcupado(infoOcupado) {
     try {
-      await removerDisponibilidade(slot.id);
-      if (editandoSlotId === slot.id) {
-        cancelarEdicaoSlot();
+      if (infoOcupado?.consulta?.id) {
+        await fetchComSessao(
+          `${API_URL}/agendamentos/${infoOcupado.consulta.id}`,
+          { method: "DELETE" }
+        );
       }
-      showToast("Horário removido.");
-      await Promise.all([carregarAgenda(profissionalId), executarBusca()]);
+      if (infoOcupado?.disponibilidade?.id) {
+        await removerDisponibilidade(infoOcupado.disponibilidade.id);
+      }
+      showToast("Horário liberado com sucesso.");
+      await Promise.all([
+        carregarAgenda(profissionalId),
+        carregarAgendamentosClinica(),
+        executarBusca(),
+      ]);
     } catch (err) {
-      showToast(err.message);
+      showToast(err.message || "Erro ao liberar horário.");
     }
   }
-
-  const totalAtivos = useMemo(
-    () => profissionais.filter((p) => p.ativo).length,
-    [profissionais]
-  );
 
   const temFiltroBusca = Boolean(
     buscaEspecialidadeId || buscaProfissionalId || buscaDia || buscaData
@@ -252,119 +827,130 @@ export default function AgendaConfigAdmin() {
 
   return (
     <div className="page-stack schedule-page">
-      <section className="schedule-hero-banner">
-        <div className="schedule-hero-copy">
-          <span className="eyebrow">
-            PAINEL ADMINISTRATIVO · UC07 &amp; UC08
-          </span>
-          <h2 className="page-title">Configuração de Agenda</h2>
-          <p className="page-subtitle">
-            Defina os dias da semana e faixas de horário de atendimento de cada
-            profissional e consulte a disponibilidade por especialidade.
-          </p>
-        </div>
-
-        <div className="schedule-kpi-group" aria-label="Resumo da agenda">
-          <div className="schedule-kpi-pill">
-            <span className="schedule-kpi-label">Profissionais ativos</span>
-            <strong className="schedule-kpi-value">{totalAtivos}</strong>
-          </div>
-          <div className="schedule-kpi-pill">
-            <span className="schedule-kpi-label">Especialidades</span>
-            <strong className="schedule-kpi-value">
-              {especialidades.length}
-            </strong>
-          </div>
-          <div className="schedule-kpi-pill schedule-kpi-pill-highlight">
-            <span className="schedule-kpi-label">Faixas do profissional</span>
-            <strong className="schedule-kpi-value">
-              {profissionalId ? disponibilidades.length : "—"}
-            </strong>
-          </div>
-        </div>
-      </section>
-
-      <div className="schedule-section-divider">
-        <span className="schedule-section-step">ETAPA 1 · UC07</span>
-        <h3 className="schedule-section-heading">
-          Grade de Atendimento do Profissional
-        </h3>
-        <span className="schedule-section-line" aria-hidden="true" />
-      </div>
-
-      <div className="admin-grid schedule-main-grid">
-        <section className="schedule-panel">
-          <header className="schedule-panel-header">
-            <div className="schedule-panel-header-main">
-              <span
-                className="schedule-panel-icon schedule-panel-icon-blue"
-                aria-hidden="true"
+      <section className="schedule-panel">
+        <header className="schedule-panel-header">
+          <div className="schedule-panel-header-main">
+            <span
+              className="schedule-panel-icon schedule-panel-icon-blue"
+              aria-hidden="true"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="12" cy="12" r="9" />
-                  <polyline points="12 7 12 12 15.5 14" />
-                </svg>
-              </span>
-              <div>
-                <h2 className="card-title">
-                  {editandoSlotId !== null
-                    ? "Editar faixa de horário"
-                    : "Adicionar horário de atendimento"}
-                </h2>
-                <p className="card-description">
-                  Configure o expediente semanal por profissional.
-                </p>
-              </div>
+                <circle cx="12" cy="12" r="9" />
+                <polyline points="12 7 12 12 15.5 14" />
+              </svg>
+            </span>
+            <div>
+              <h2 className="card-title">
+                Agendar consulta para o médico (Recepção / Admin)
+              </h2>
+              <p className="card-description">
+                Selecione o médico, o paciente, a data e o horário comercial (15
+                ou 20 min, das 08:00 às 17:00). O agendamento aparece direto na
+                agenda do médico.
+              </p>
             </div>
+          </div>
 
-            {editandoSlotId !== null && (
-              <span className="schedule-header-badge schedule-badge-editing">
-                Modo edição
+          <div className="schedule-panel-header-actions">
+            {profissionalAtual && (
+              <span className="schedule-header-badge schedule-badge-active">
+                {agendamentosDoMedico.length} consulta(s) na agenda de{" "}
+                {profissionalAtual.nome}
               </span>
             )}
-          </header>
 
-          <div className="schedule-panel-body">
-            <form className="admin-form" onSubmit={handleSubmitSlot}>
+            <Btn
+              variant="primary"
+              size="sm"
+              onClick={() =>
+                navigate(
+                  `/admin/agenda/calendario${
+                    profissionalId ? `?profissional=${profissionalId}` : ""
+                  }`
+                )
+              }
+            >
+              📅 Abrir Calendário Mensal
+            </Btn>
+          </div>
+        </header>
+
+        <div className="schedule-panel-body">
+          <form
+            className="admin-form"
+            onSubmit={handleSubmitAgendamentoRecepcao}
+          >
+            {/* LINHA SUPERIOR: 1. MÉDICO | 2. PACIENTE | 3. DATA E MODALIDADE */}
+            <div className="schedule-top-setup-3cols">
               <div className="schedule-field-group">
                 <div className="schedule-field-head">
                   <span className="schedule-step-num">1</span>
-                  <label className="form-label" htmlFor="agenda-profissional">
-                    Profissional
-                  </label>
+                  <span className="form-label">Profissional (Médico)</span>
                 </div>
-                <select
+
+                <SearchableCombobox
                   id="agenda-profissional"
-                  className="form-input"
+                  placeholder="Pesquisar médico por nome, CRM ou especialidade..."
                   value={profissionalId}
-                  onChange={(e) => selecionarProfissional(e.target.value)}
-                >
-                  <option value="">Selecione um profissional...</option>
-                  {profissionais.map((prof) => (
-                    <option key={prof.id} value={prof.id}>
-                      {prof.nome} ({prof.documento_registro})
-                      {!prof.ativo ? " — Inativo" : ""}
-                    </option>
-                  ))}
-                </select>
+                  options={opcoesProfissionaisForm}
+                  selectedOption={profissionalFormSelecionado}
+                  searching={buscandoProfFormServer}
+                  hintText="Nome, registro ou especialidade"
+                  emptyMessage="Nenhum profissional encontrado."
+                  onSearchChange={setTermoBuscaProfForm}
+                  onSelect={(novoId) => selecionarProfissional(novoId)}
+                />
               </div>
 
               <div className="schedule-field-group">
                 <div className="schedule-field-head schedule-field-head-between">
                   <div className="schedule-field-head-left">
                     <span className="schedule-step-num">2</span>
+                    <span className="form-label">Paciente</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="commercial-quick-link"
+                    onClick={() => navigate("/admin/pacientes")}
+                  >
+                    + Cadastrar paciente
+                  </button>
+                </div>
+
+                <SearchableCombobox
+                  id="agenda-paciente-recepcao"
+                  placeholder="Pesquisar paciente por nome ou CPF..."
+                  value={pacienteId}
+                  options={opcoesPacientesForm}
+                  selectedOption={pacienteFormSelecionado}
+                  searching={buscandoPacienteServer}
+                  hintText="Busque por nome ou CPF"
+                  emptyMessage="Nenhum paciente encontrado. Cadastre em Pacientes."
+                  onSearchChange={setTermoBuscaPacienteForm}
+                  onSelect={(novoPacId) => {
+                    setPacienteId(novoPacId);
+                    setError("");
+                  }}
+                />
+              </div>
+
+              <div className="schedule-field-group">
+                <div className="schedule-field-head schedule-field-head-between">
+                  <div className="schedule-field-head-left">
+                    <span className="schedule-step-num">3</span>
                     <label
                       className="form-label"
                       htmlFor="agenda-data-atendimento"
                     >
-                      Data do atendimento
+                      Data e modalidade
                     </label>
                   </div>
 
@@ -410,359 +996,327 @@ export default function AgendaConfigAdmin() {
                     >
                       +7 dias
                     </button>
-                    <button
-                      type="button"
-                      className={`date-shortcut-chip ${
-                        !dataAtendimento ? "date-shortcut-chip-active" : ""
-                      }`}
-                      onClick={() => handleChangeDataAtendimento("")}
-                    >
-                      Fixo semanal
-                    </button>
                   </div>
                 </div>
 
-                <div className="schedule-date-picker-wrap">
+                <div className="schedule-date-inline-row">
                   <input
                     id="agenda-data-atendimento"
                     type="date"
-                    className="form-input schedule-date-input"
+                    className="form-input schedule-date-input-compact"
                     value={dataAtendimento}
                     onChange={(e) =>
                       handleChangeDataAtendimento(e.target.value)
                     }
+                    required
                   />
 
-                  <div className="schedule-date-preview">
-                    <span className="schedule-date-preview-icon" aria-hidden="true">
-                      {dataAtendimento ? "📅" : "↻"}
+                  <select
+                    aria-label="Modalidade do atendimento"
+                    className="form-input"
+                    style={{ flex: "1 1 135px" }}
+                    value={modalidade}
+                    onChange={(e) => setModalidade(e.target.value)}
+                  >
+                    <option value="presencial">Presencial</option>
+                    <option value="teleconsulta">Teleconsulta</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* PASSO 4: GRADE COMPLETA DE HORÁRIOS EM LARGURA TOTAL SEM SCROLL */}
+            <div className="schedule-field-group schedule-step3-full">
+              <div className="schedule-step3-topbar">
+                <div className="schedule-field-head-left">
+                  <span className="schedule-step-num">4</span>
+                  <div>
+                    <span className="form-label">
+                      Selecione o horário da consulta (08:00 às 17:00)
                     </span>
-                    <span>
-                      {dataAtendimento ? (
-                        <>
-                          Atendimento em{" "}
-                          <strong>{formatDataExtenso(dataAtendimento)}</strong>
-                        </>
-                      ) : (
-                        <>
-                          Expediente recorrente toda{" "}
-                          <strong>{LABEL_POR_DIA[diaSemana]}</strong>
-                        </>
-                      )}
-                    </span>
+                    <small className="schedule-step3-subtitle">
+                      {dataAtendimento
+                        ? `Atendimento em ${formatDataExtenso(dataAtendimento)}`
+                        : `Expediente toda ${LABEL_POR_DIA[diaSemana]}`}
+                      {pacienteFormSelecionado
+                        ? ` · Paciente: ${pacienteFormSelecionado.label}`
+                        : " · Selecione um paciente no passo 2 acima"}
+                    </small>
                   </div>
                 </div>
 
-                <div className="schedule-weekday-subblock">
-                  <span className="time-sublabel">
-                    Dia da semana correspondente
-                  </span>
+                <div className="schedule-step3-controls">
                   <div
-                    className="day-selector"
+                    className="schedule-duration-box"
                     role="group"
-                    aria-label="Dia da semana"
+                    aria-label="Tempo fixo de cada consulta"
                   >
-                    {DIAS_SEMANA.map((dia) => (
+                    <span className="schedule-duration-label">
+                      Tempo por consulta:
+                    </span>
+                    {[15, 20].map((min) => (
                       <button
-                        key={dia.value}
+                        key={min}
                         type="button"
-                        aria-pressed={diaSemana === dia.value}
-                        onClick={() => handleSelectDiaSemana(dia.value)}
-                        className={`day-pill ${
-                          diaSemana === dia.value ? "day-pill-active" : ""
+                        className={`duration-choice-btn ${
+                          duracaoMinutos === min
+                            ? "duration-choice-btn-active"
+                            : ""
                         }`}
+                        onClick={() => handleTrocarDuracao(min)}
                       >
-                        {dia.short}
+                        {min} minutos
                       </button>
                     ))}
                   </div>
+
+                  {slotsSelecionados.length > 0 && (
+                    <button
+                      type="button"
+                      className="commercial-quick-link commercial-quick-clear"
+                      onClick={() => setSlotsSelecionados([])}
+                    >
+                      Limpar seleção ({slotsSelecionados.length})
+                    </button>
+                  )}
                 </div>
               </div>
 
-              <div className="schedule-field-group">
-                <div className="schedule-field-head schedule-field-head-between">
-                  <div className="schedule-field-head-left">
-                    <span className="schedule-step-num">3</span>
-                    <span className="form-label">Faixa de horário</span>
+              <div className="commercial-legend-bar">
+                <span className="commercial-legend-item">
+                  <span className="commercial-legend-dot commercial-legend-dot-free" />
+                  Disponível para agendar
+                </span>
+                <span className="commercial-legend-item">
+                  <span className="commercial-legend-dot commercial-legend-dot-selected" />
+                  Selecionado ({slotsSelecionados.length})
+                </span>
+                <span className="commercial-legend-item">
+                  <span className="commercial-legend-dot commercial-legend-dot-occupied" />
+                  Já ocupado nesta data ({mapaSlotsOcupadosNoDia.size}) — clique
+                  no × para cancelar/liberar
+                </span>
+              </div>
+
+              <div className="commercial-shifts-columns">
+                {/* BLOCO MANHÃ: 08:00 às 12:00 */}
+                <div className="commercial-shift-block">
+                  <div className="commercial-shift-block-header">
+                    <div>
+                      <strong>☀ Turno da Manhã</strong>
+                      <span>08:00 às 12:00 ({slotsManha.length} horários)</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="commercial-shift-select-btn"
+                      onClick={() => selecionarTurnoLivre("MANHA")}
+                    >
+                      Selecionar manhã
+                    </button>
                   </div>
 
-                  <div
-                    className="schedule-date-shortcuts"
-                    role="group"
-                    aria-label="Turnos rápidos"
-                  >
-                    {TURNOS_RAPIDOS.map((turno) => {
-                      const ativo =
-                        horarioInicio === turno.inicio &&
-                        horarioFim === turno.fim;
+                  <div className="commercial-slots-grid-noscroll">
+                    {slotsManha.map((slot) => {
+                      const infoOcupado = mapaSlotsOcupadosNoDia.get(slot.key);
+                      const ocupado = Boolean(infoOcupado);
+                      const selecionado = slotsSelecionados.includes(slot.key);
+
+                      if (ocupado) {
+                        return (
+                          <div
+                            key={slot.key}
+                            className="commercial-slot-chip commercial-slot-chip-occupied"
+                            title={
+                              infoOcupado.pacienteNome
+                                ? `${slot.label} — Agendado para ${infoOcupado.pacienteNome}`
+                                : `Horário ${slot.label} já ocupado nesta data`
+                            }
+                          >
+                            <div className="commercial-slot-occupied-row">
+                              <strong>
+                                {slot.inicio} – {slot.fim}
+                              </strong>
+                              <button
+                                type="button"
+                                className="commercial-slot-remove-inline"
+                                title="Cancelar/liberar este horário"
+                                onClick={() =>
+                                  handleLiberarHorarioOcupado(infoOcupado)
+                                }
+                              >
+                                ×
+                              </button>
+                            </div>
+                            <small
+                              style={{
+                                maxWidth: "100%",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {infoOcupado.pacienteNome || "Já agendado"}
+                            </small>
+                          </div>
+                        );
+                      }
+
                       return (
                         <button
-                          key={turno.label}
+                          key={slot.key}
                           type="button"
-                          className={`date-shortcut-chip ${
-                            ativo ? "date-shortcut-chip-active" : ""
+                          onClick={() => toggleSlotComercial(slot.key)}
+                          className={`commercial-slot-chip ${
+                            selecionado ? "commercial-slot-chip-selected" : ""
                           }`}
-                          onClick={() => {
-                            setHorarioInicio(turno.inicio);
-                            setHorarioFim(turno.fim);
-                          }}
                         >
-                          {turno.label}
+                          <strong>
+                            {slot.inicio} – {slot.fim}
+                          </strong>
+                          <small>
+                            {selecionado
+                              ? "✓ Selecionado"
+                              : `${duracaoMinutos} min`}
+                          </small>
                         </button>
                       );
                     })}
                   </div>
                 </div>
 
-                <div className="time-row">
-                  <div className="time-input-col">
-                    <label className="time-sublabel" htmlFor="horario-inicio">
-                      Início
-                    </label>
-                    <input
-                      id="horario-inicio"
-                      type="time"
-                      className="form-input"
-                      value={horarioInicio}
-                      onChange={(e) => setHorarioInicio(e.target.value)}
-                    />
-                  </div>
-
-                  <span className="time-range-arrow" aria-hidden="true">
-                    →
-                  </span>
-
-                  <div className="time-input-col">
-                    <label className="time-sublabel" htmlFor="horario-fim">
-                      Término
-                    </label>
-                    <input
-                      id="horario-fim"
-                      type="time"
-                      className="form-input"
-                      value={horarioFim}
-                      onChange={(e) => setHorarioFim(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="schedule-rule-box">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="16" x2="12" y2="12" />
-                  <line x1="12" y1="8" x2="12.01" y2="8" />
-                </svg>
-                <span>
-                  Horários sobrepostos no mesmo dia são bloqueados
-                  automaticamente.
-                </span>
-              </div>
-
-              {error && (
-                <p className="form-error" role="alert">
-                  {error}
-                </p>
-              )}
-
-              <div className="admin-form-actions">
-                <Btn
-                  type="submit"
-                  className="btn-block"
-                  disabled={submitting || !profissionalId}
-                >
-                  {submitting
-                    ? "Salvando..."
-                    : editandoSlotId !== null
-                      ? "Atualizar horário"
-                      : "+ Adicionar à agenda"}
-                </Btn>
-
-                {editandoSlotId !== null && (
-                  <Btn
-                    variant="secondary"
-                    className="btn-block"
-                    onClick={cancelarEdicaoSlot}
-                  >
-                    Cancelar edição
-                  </Btn>
-                )}
-              </div>
-            </form>
-          </div>
-        </section>
-
-        <section className="schedule-panel">
-          <header className="schedule-panel-header">
-            <div className="schedule-panel-header-main">
-              <span
-                className="schedule-panel-icon schedule-panel-icon-indigo"
-                aria-hidden="true"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                  <line x1="16" y1="2" x2="16" y2="6" />
-                  <line x1="8" y1="2" x2="8" y2="6" />
-                  <line x1="3" y1="10" x2="21" y2="10" />
-                </svg>
-              </span>
-              <div>
-                <h2 className="card-title">
-                  {profissionalAtual
-                    ? `Grade semanal — ${profissionalAtual.nome}`
-                    : "Grade semanal do profissional"}
-                </h2>
-                <p className="card-description">
-                  {profissionalAtual
-                    ? `Registro ${profissionalAtual.documento_registro} · Visualize ou edite as faixas por dia da semana.`
-                    : "Selecione um profissional para visualizar e editar os horários."}
-                </p>
-              </div>
-            </div>
-
-            <span
-              className={`schedule-header-badge ${
-                profissionalAtual
-                  ? disponibilidades.length > 0
-                    ? "schedule-badge-active"
-                    : "schedule-badge-neutral"
-                  : "schedule-badge-neutral"
-              }`}
-            >
-              {profissionalAtual
-                ? `${disponibilidades.length} faixa(s) configurada(s)`
-                : "Aguardando seleção"}
-            </span>
-          </header>
-
-          <div className="schedule-panel-body schedule-panel-body-fill">
-            {!profissionalId ? (
-              <div className="schedule-empty-box">
-                <span className="schedule-empty-icon" aria-hidden="true">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <rect x="3" y="4" width="18" height="18" rx="2" />
-                    <line x1="16" y1="2" x2="16" y2="6" />
-                    <line x1="8" y1="2" x2="8" y2="6" />
-                    <line x1="3" y1="10" x2="21" y2="10" />
-                    <circle cx="12" cy="15" r="2" />
-                  </svg>
-                </span>
-                <strong>Nenhum profissional selecionado</strong>
-                <p>
-                  Escolha um profissional no passo <strong>1</strong> ao lado
-                  para carregar os dias da semana e gerenciar os horários de
-                  atendimento.
-                </p>
-              </div>
-            ) : loadingAgenda ? (
-              <div className="schedule-empty-box">
-                <strong>Carregando grade semanal...</strong>
-              </div>
-            ) : (
-              <div className="week-schedule">
-                {DIAS_SEMANA.map((dia) => {
-                  const slots = porDia[dia.value] || [];
-                  const possuiSlots = slots.length > 0;
-                  return (
-                    <div
-                      className={`week-day-row ${
-                        possuiSlots
-                          ? "week-day-row-filled"
-                          : "week-day-row-empty"
-                      }`}
-                      key={dia.value}
+                {/* BLOCO TARDE: 12:00 às 17:00 */}
+                <div className="commercial-shift-block">
+                  <div className="commercial-shift-block-header">
+                    <div>
+                      <strong>🌤 Turno da Tarde</strong>
+                      <span>12:00 às 17:00 ({slotsTarde.length} horários)</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="commercial-shift-select-btn"
+                      onClick={() => selecionarTurnoLivre("TARDE")}
                     >
-                      <div className="week-day-label">
-                        <span className="week-day-abbr">{dia.short}</span>
-                        <div>
-                          <strong>{dia.label}</strong>
-                          <small>
-                            {!possuiSlots
-                              ? "Sem atendimento"
-                              : `${slots.length} faixa(s) ativa(s)`}
-                          </small>
-                        </div>
-                      </div>
+                      Selecionar tarde
+                    </button>
+                  </div>
 
-                      <div className="week-day-slots">
-                        {!possuiSlots ? (
-                          <span className="slot-empty">Livre</span>
-                        ) : (
-                          slots.map((slot) => (
-                            <div className="slot-badge" key={slot.id}>
-                              <span
-                                className={`slot-date-chip ${
-                                  slot.data_atendimento
-                                    ? "slot-date-chip-specific"
-                                    : "slot-date-chip-recurring"
-                                }`}
-                              >
-                                {slot.data_atendimento
-                                  ? `📅 ${formatDataBR(slot.data_atendimento)}`
-                                  : "↻ Semanal"}
-                              </span>
+                  <div className="commercial-slots-grid-noscroll">
+                    {slotsTarde.map((slot) => {
+                      const infoOcupado = mapaSlotsOcupadosNoDia.get(slot.key);
+                      const ocupado = Boolean(infoOcupado);
+                      const selecionado = slotsSelecionados.includes(slot.key);
+
+                      if (ocupado) {
+                        return (
+                          <div
+                            key={slot.key}
+                            className="commercial-slot-chip commercial-slot-chip-occupied"
+                            title={
+                              infoOcupado.pacienteNome
+                                ? `${slot.label} — Agendado para ${infoOcupado.pacienteNome}`
+                                : `Horário ${slot.label} já ocupado nesta data`
+                            }
+                          >
+                            <div className="commercial-slot-occupied-row">
                               <strong>
-                                {formatHora(slot.horario_inicio)} –{" "}
-                                {formatHora(slot.horario_fim)}
+                                {slot.inicio} – {slot.fim}
                               </strong>
                               <button
                                 type="button"
-                                className="slot-action-btn"
-                                title="Editar horário"
-                                onClick={() => iniciarEdicaoSlot(slot)}
-                              >
-                                ✎
-                              </button>
-                              <button
-                                type="button"
-                                className="slot-action-btn slot-action-remove"
-                                title="Remover horário"
-                                onClick={() => handleRemoverSlot(slot)}
+                                className="commercial-slot-remove-inline"
+                                title="Cancelar/liberar este horário"
+                                onClick={() =>
+                                  handleLiberarHorarioOcupado(infoOcupado)
+                                }
                               >
                                 ×
                               </button>
                             </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </section>
-      </div>
+                            <small
+                              style={{
+                                maxWidth: "100%",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {infoOcupado.pacienteNome || "Já agendado"}
+                            </small>
+                          </div>
+                        );
+                      }
 
-      <div className="schedule-section-divider">
-        <span className="schedule-section-step">ETAPA 2 · UC08</span>
-        <h3 className="schedule-section-heading">
-          Consulta Geral de Disponibilidade
-        </h3>
-        <span className="schedule-section-line" aria-hidden="true" />
-      </div>
+                      return (
+                        <button
+                          key={slot.key}
+                          type="button"
+                          onClick={() => toggleSlotComercial(slot.key)}
+                          className={`commercial-slot-chip ${
+                            selecionado ? "commercial-slot-chip-selected" : ""
+                          }`}
+                        >
+                          <strong>
+                            {slot.inicio} – {slot.fim}
+                          </strong>
+                          <small>
+                            {selecionado
+                              ? "✓ Selecionado"
+                              : `${duracaoMinutos} min`}
+                          </small>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {error && (
+              <p className="form-error" role="alert">
+                {error}
+              </p>
+            )}
+
+            <div className="schedule-submit-footer">
+              <div className="schedule-submit-summary">
+                <strong>
+                  {slotsSelecionados.length > 0
+                    ? `${slotsSelecionados.length} horário(s) de ${duracaoMinutos} minutos selecionado(s)`
+                    : "Clique nos horários desejados acima para selecionar"}
+                </strong>
+                <span>
+                  {pacienteFormSelecionado
+                    ? `Paciente: ${pacienteFormSelecionado.label} · `
+                    : "Selecione o paciente no passo 2 · "}
+                  Data: {formatDataBR(dataAtendimento)} (
+                  {LABEL_POR_DIA[diaSemana]}) ·{" "}
+                  {modalidade === "teleconsulta"
+                    ? "Teleconsulta"
+                    : "Presencial"}
+                </span>
+              </div>
+
+              <div className="schedule-submit-buttons">
+                <Btn
+                  type="submit"
+                  disabled={
+                    submitting ||
+                    !profissionalId ||
+                    !pacienteId ||
+                    slotsSelecionados.length === 0
+                  }
+                >
+                  {submitting
+                    ? "Agendando..."
+                    : slotsSelecionados.length > 1
+                      ? `+ Agendar ${slotsSelecionados.length} consultas para o médico`
+                      : "+ Agendar consulta para o médico"}
+                </Btn>
+              </div>
+            </div>
+          </form>
+        </div>
+      </section>
 
       <section className="schedule-panel">
         <header className="schedule-panel-header">
@@ -784,12 +1338,11 @@ export default function AgendaConfigAdmin() {
               </svg>
             </span>
             <div>
-              <h2 className="card-title">
-                Consulta de horários disponíveis (UC08)
-              </h2>
+              <h2 className="card-title">Consulta de horários configurados</h2>
               <p className="card-description">
                 Pesquisa os horários de atendimento dos profissionais ativos
-                filtrando por data, profissional, especialidade ou dia da semana.
+                filtrando por data, profissional, especialidade ou dia da
+                semana.
               </p>
             </div>
           </div>
@@ -910,10 +1463,7 @@ export default function AgendaConfigAdmin() {
               </div>
 
               <div className="schedule-filter-field">
-                <label
-                  className="schedule-filter-label"
-                  htmlFor="filtro-profissional-uc08"
-                >
+                <span className="schedule-filter-label">
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"
@@ -927,25 +1477,19 @@ export default function AgendaConfigAdmin() {
                     <circle cx="12" cy="7" r="4" />
                   </svg>
                   Profissional ativo
-                </label>
-                <select
+                </span>
+                <SearchableCombobox
                   id="filtro-profissional-uc08"
-                  className={`form-input schedule-filter-control ${
-                    buscaProfissionalId ? "schedule-filter-control-active" : ""
-                  }`}
-                  aria-label="Filtrar busca por profissional"
+                  placeholder="Todos os profissionais ativos..."
                   value={buscaProfissionalId}
-                  onChange={(e) => setBuscaProfissionalId(e.target.value)}
-                >
-                  <option value="">Todos os profissionais ativos</option>
-                  {profissionais
-                    .filter((p) => p.ativo)
-                    .map((prof) => (
-                      <option key={prof.id} value={prof.id}>
-                        {prof.nome}
-                      </option>
-                    ))}
-                </select>
+                  options={opcoesProfissionaisFiltro}
+                  selectedOption={profissionalFiltroSelecionado}
+                  searching={buscandoProfFiltroServer}
+                  hintText="Digite nome ou registro"
+                  emptyMessage="Nenhum profissional ativo encontrado."
+                  onSearchChange={setTermoBuscaProfFiltro}
+                  onSelect={(val) => setBuscaProfissionalId(val)}
+                />
               </div>
 
               <div className="schedule-filter-field">
@@ -1103,4 +1647,3 @@ export default function AgendaConfigAdmin() {
     </div>
   );
 }
-

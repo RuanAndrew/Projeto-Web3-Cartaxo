@@ -112,17 +112,6 @@ export default function EspecialidadesAdmin() {
 
   return (
     <div className="page-stack">
-      <section className="page-heading">
-        <div>
-          <span className="eyebrow">PAINEL ADMINISTRATIVO · UC06</span>
-          <h2 className="page-title">Gestão de Especialidades</h2>
-          <p className="page-subtitle">
-            Cadastre e mantenha as especialidades clínicas disponíveis para
-            vincular aos profissionais de saúde.
-          </p>
-        </div>
-      </section>
-
       <div className="admin-grid">
         <Card
           title={

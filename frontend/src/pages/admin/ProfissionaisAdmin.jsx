@@ -185,17 +185,6 @@ export default function ProfissionaisAdmin() {
 
   return (
     <div className="page-stack">
-      <section className="page-heading">
-        <div>
-          <span className="eyebrow">PAINEL ADMINISTRATIVO · UC05</span>
-          <h2 className="page-title">Gestão de Profissionais</h2>
-          <p className="page-subtitle">
-            Cadastre profissionais de saúde, associe múltiplas especialidades e
-            controle quem está ativo para agendamentos.
-          </p>
-        </div>
-      </section>
-
       <div className="admin-grid">
         <Card
           title={

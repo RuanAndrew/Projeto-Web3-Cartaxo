@@ -391,7 +391,7 @@ function getAppointmentStatus(status) {
     },
     nao_compareceu: {
       label: "Não compareceu",
-      key: "cancelled",
+      key: "noshow",
     },
     concluido: {
       label: "Concluído",
@@ -823,12 +823,14 @@ export default function Agenda() {
 
       const isPending =
         statusInfo.key === "confirmed" || statusInfo.key === "waiting";
+      const isCancelledOrNoShow =
+        statusInfo.key === "cancelled" || statusInfo.key === "noshow";
 
       const matchesFilter =
         filter === "Todas" ||
         (filter === "Pendentes" && isPending) ||
         (filter === "Concluídas" && statusInfo.key === "completed") ||
-        (filter === "Canceladas" && statusInfo.key === "cancelled");
+        (filter === "Canceladas" && isCancelledOrNoShow);
 
       return matchesSearch && matchesFilter;
     });
@@ -841,7 +843,11 @@ export default function Agenda() {
 
     for (const apt of enrichedAppointments) {
       if (apt.statusInfo.key === "completed") completed += 1;
-      else if (apt.statusInfo.key === "cancelled") cancelled += 1;
+      else if (
+        apt.statusInfo.key === "cancelled" ||
+        apt.statusInfo.key === "noshow"
+      )
+        cancelled += 1;
       else pending += 1;
     }
 
@@ -1558,14 +1564,15 @@ export default function Agenda() {
             </div>
           ) : (
             <div className="doctor-patient-stack">
-              {visibleAppointments.map((appointment, index) => {
+              {visibleAppointments.map((appointment) => {
                 const { statusInfo, pacienteInfo, isTeleconsulta } = appointment;
-                const colorClasses = ["lavender", "mint", "peach", "blue"];
                 const isPending =
                   statusInfo.key === "confirmed" ||
                   statusInfo.key === "waiting";
                 const isCompleted = statusInfo.key === "completed";
-                const isCancelled = statusInfo.key === "cancelled";
+                const isCancelled =
+                  statusInfo.key === "cancelled" ||
+                  statusInfo.key === "noshow";
 
                 return (
                   <article
@@ -1586,9 +1593,7 @@ export default function Agenda() {
 
                     <div className="doctor-patient-main">
                       <div
-                        className={`patient-avatar avatar-${
-                          colorClasses[index % colorClasses.length]
-                        }`}
+                        className="patient-avatar doctor-uniform-avatar"
                         aria-hidden="true"
                       >
                         {pacienteInfo.iniciais}

@@ -17,6 +17,7 @@ import Receitas from "./pages/Receitas.jsx";
 import EspecialidadesAdmin from "./pages/admin/EspecialidadesAdmin.jsx";
 import ProfissionaisAdmin from "./pages/admin/ProfissionaisAdmin.jsx";
 import AgendaConfigAdmin from "./pages/admin/AgendaConfigAdmin.jsx";
+import AgendaCalendarioAdmin from "./pages/admin/AgendaCalendarioAdmin.jsx";
 
 import AdminLayout from "./layouts/AdminLayout/index.jsx";
 import DoctorLayout from "./layouts/DoctorLayout/index.jsx";
@@ -42,7 +43,12 @@ export default function App() {
               path="especialidades"
               element={<EspecialidadesAdmin />}
             />
+            <Route path="pacientes" element={<Pacientes />} />
             <Route path="agenda" element={<AgendaConfigAdmin />} />
+            <Route
+              path="agenda/calendario"
+              element={<AgendaCalendarioAdmin />}
+            />
           </Route>
 
           <Route element={<DoctorLayout />}>
@@ -55,8 +61,12 @@ export default function App() {
               path="/prontuario/:id"
               element={<Prontuario />}
             />
-            <Route path="/pacientes" element={<Pacientes />} />
           </Route>
+
+          <Route
+            path="/pacientes"
+            element={<Navigate to="/admin/pacientes" replace />}
+          />
 
           <Route element={<PatientLayout />}>
             <Route path="/portal" element={<Portal />} />
