@@ -1,43 +1,41 @@
-# Prontuario Service
+# prontuario-service
 
-API FastAPI responsavel por armazenar registros clinicos textuais vinculados a
-um paciente. O servico nao replica os dados do paciente; `patient_id`,
-`professional_id` e `appointment_id` sao referencias aos demais microsservicos.
+Registros clínicos textuais (anamnese, evolução, diagnóstico e conduta) vinculados
+ao paciente. O serviço **não guarda dados cadastrais**: `paciente_id` é o id do
+cadastro em `pacientes-service` (`pacientes.id`).
 
-## Execucao local
+Porta em desenvolvimento: **8008** (o container escuta 8000). Pelo gateway: `/prontuarios`.
 
-```bash
-pip install .
-PRONTUARIO_DATABASE_PATH=./prontuario.db uvicorn main:app --reload
-```
+## Regras (UC-04)
 
-Por padrao, o banco SQLite fica em `prontuario.db`. Em Docker Compose, o
-arquivo e persistido no volume `prontuario_data` e o servico fica disponivel em
-`http://localhost:8005`.
+- Cada gravação é uma **versão nova**. Não existe edição destrutiva nem exclusão:
+  não há rotas `PUT`, `PATCH` ou `DELETE`, e o banco recusa `UPDATE`/`DELETE`
+  nas tabelas por *trigger*.
+- O profissional responsável é sempre o do **token**, nunca o do corpo da requisição.
+- Só o profissional responsável complementa o prontuário.
+
+## Quem acessa
+
+| Perfil | Acesso |
+|---|---|
+| `PROFISSIONAL` | abre prontuário, complementa os próprios e lê |
+| `PACIENTE` | lê apenas o próprio (resolvido por `GET /api/v1/pacientes/me`) |
+| `ATENDENTE`, `ADMIN` | sem acesso ao conteúdo clínico |
 
 ## Endpoints
 
-- `GET /health`: verifica se o servico esta ativo.
-- `POST /prontuarios`: cria um registro. `patient_id` e obrigatorio e pelo
-  menos um entre `anamnesis`, `evolution`, `diagnosis` e `conduct` deve ser
-  preenchido.
-- `GET /prontuarios?patient_id=<uuid>`: lista os registros de um paciente.
-- `GET /prontuarios/{id}`: consulta um registro.
-- `PATCH /prontuarios/{id}`: atualiza parcialmente os campos do registro.
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/health` | saúde do serviço |
+| POST | `/prontuarios` | abre prontuário (versão 1) |
+| GET | `/prontuarios?paciente_id=` | lista; profissional deve informar o paciente |
+| GET | `/prontuarios/{id}` | prontuário com a versão atual |
+| GET | `/prontuarios/{id}/versoes` | histórico completo |
+| POST | `/prontuarios/{id}/versoes` | complemento (nova versão) |
 
-Exemplo de criacao:
+## Testes
 
-```json
-{
-  "patient_id": "00000000-0000-0000-0000-000000000001",
-  "professional_id": "00000000-0000-0000-0000-000000000002",
-  "appointment_id": "00000000-0000-0000-0000-000000000003",
-  "anamnesis": "Queixa principal e historico relatados pelo paciente.",
-  "evolution": "Observacoes realizadas durante o atendimento.",
-  "diagnosis": "Hipotese ou diagnostico registrado pelo profissional.",
-  "conduct": "Conduta e orientacoes definidas para o paciente."
-}
-```
+    docker compose exec prontuario-service pytest -v
 
-A documentacao interativa fica disponivel em `/docs` quando o servico estiver
-em execucao.
+Usam SQLite em memória e um `pacientes-service` simulado. As regras de banco
+(triggers, migration) só são exercitadas no PostgreSQL.
