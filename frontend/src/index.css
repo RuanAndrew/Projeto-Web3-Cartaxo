@@ -5986,7 +5986,7 @@ p {
   gap: 18px;
   min-height: 96px;
   height: 96px;
-  padding: 14px 18px;
+  padding: 11px 18px;
   background: #f9fbff;
   border: 1px solid #dbe4f3;
   border-left: 4px solid #315fe8;
@@ -6268,17 +6268,19 @@ p {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  padding: 10px 8px;
+  gap: 1px;
+  height: 72px;
+  padding: 6px 8px;
   background: #ffffff;
   border: 1px solid #dce5f4;
   border-radius: 11px;
+  box-sizing: border-box;
   text-align: center;
 }
 
 .doctor-patient-hour {
   color: #172033;
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 850;
   letter-spacing: -0.5px;
   line-height: 1.1;
@@ -6286,14 +6288,16 @@ p {
 
 .doctor-patient-duration {
   color: #315fe8;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
+  line-height: 1.2;
 }
 
 .doctor-patient-date {
   color: #64748b;
   font-size: 11px;
   font-weight: 600;
+  line-height: 1.2;
 }
 
 .doctor-patient-main {
@@ -7374,5 +7378,299 @@ p {
   .doctor-patient-actions {
     width: 100%;
     justify-content: flex-start;
+  }
+}
+
+/* =========================================================
+   DIRETÓRIO ESCALÁVEL DE PRONTUÁRIOS (100K+ PACIENTES / MÚLTIPLAS ESPECIALIDADES)
+   PADRONIZADO COM A PALETA DA TELA DE AGENDAMENTO
+   ========================================================= */
+
+.records-header-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.records-sync-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.records-scalable-filters-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.6fr) minmax(240px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.records-uniform-status-badge {
+  background: #edf2ff !important;
+  color: #244bc4 !important;
+  border: 1px solid #d5e2ff !important;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.records-main-search {
+  position: relative;
+  width: 100%;
+  min-height: 44px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+}
+
+.records-main-search:focus-within {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.records-search-clear-btn {
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.records-search-clear-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.records-specialty-combobox .doctor-combobox-control {
+  min-height: 44px;
+}
+
+.records-compact-select {
+  min-height: 44px;
+  height: 44px;
+  padding: 8px 12px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #1e293b;
+  border-color: #cbd5e1;
+  border-radius: 10px;
+  background-color: #ffffff;
+}
+
+.records-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px;
+  background: #f1f5fb;
+  border: 1px solid #dbe4f3;
+  border-radius: 10px;
+  height: 44px;
+  box-sizing: border-box;
+}
+
+.records-view-btn {
+  padding: 6px 11px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: #475569;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.14s ease;
+}
+
+.records-view-btn:hover {
+  color: #0f172a;
+}
+
+.records-view-btn-active {
+  background: #ffffff;
+  color: #2563eb;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.records-alphabet-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.records-alpha-btn {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.records-alpha-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.records-alpha-btn-active {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+}
+
+.records-active-filters-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.records-active-filters-label {
+  color: #64748b;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.records-active-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  color: #1e3a8a;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.records-active-filter-chip button {
+  border: none;
+  background: transparent;
+  color: #1e3a8a;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.records-clear-all-link {
+  border: none;
+  background: transparent;
+  color: #2563eb;
+  font-size: 12.5px;
+  font-weight: 750;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 2px 4px;
+}
+
+.records-standardized-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.records-patient-card-clickable {
+  cursor: pointer;
+}
+
+.records-code-box {
+  min-width: 104px;
+}
+
+.records-code-number {
+  color: #172033;
+  font-size: 14.5px;
+  font-weight: 850;
+  letter-spacing: -0.3px;
+  line-height: 1.15;
+}
+
+.records-pagination-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f2;
+}
+
+.records-pagination-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  color: #475569;
+  font-size: 13.5px;
+}
+
+.records-pagination-summary strong {
+  color: #0f172a;
+}
+
+.records-pagesize-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.records-pagesize-label select {
+  padding: 5px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.records-pagination-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 1180px) {
+  .records-scalable-filters-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .records-main-search {
+    grid-column: 1 / -1;
+  }
+
+  .records-standardized-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .records-scalable-filters-grid {
+    grid-template-columns: 1fr;
   }
 }

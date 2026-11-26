@@ -1,9 +1,32 @@
-import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useLocation, useParams } from "react-router-dom";
 
 import { useToast } from "../components/ToastProvider.jsx";
 import Card from "../components/Card.jsx";
 import Btn from "../components/Btn.jsx";
+import {
+  garantirSessaoValida,
+  obterToken,
+  removerToken,
+} from "../utils/auth.js";
+
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:8000"
+).replace(/\/$/, "");
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function obterIniciais(nome = "") {
+  const partes = String(nome || "")
+    .trim()
+    .split(/\s+/)
+    .map((p) => p.replace(/[^A-Za-zÀ-ÿ]/g, ""))
+    .filter(Boolean);
+  if (partes.length === 0) return "PC";
+  if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
+  return `${partes[0][0]}${partes[partes.length - 1][0]}`.toUpperCase();
+}
 
 const audiogramGridX = [56, 118, 180, 242, 304, 366, 428];
 const audiogramGridY = [32, 72, 112, 152, 192, 232];
@@ -192,7 +215,71 @@ function Audiogram() {
 
 export default function Prontuario() {
   const { id } = useParams();
-  const patient = patientSamples[id] ?? patientSamples["3"];
+  const location = useLocation();
+  const statePatient = location.state?.patient || null;
+
+  const fallbackSample = patientSamples[id] ?? {
+    name: "Paciente em atendimento",
+    initials: "PC",
+    specialty: "Fonoaudiologia",
+    modality: "Presencial",
+    code: UUID_REGEX.test(String(id || ""))
+      ? `PRT-${String(id).slice(0, 6).toUpperCase()}`
+      : `PRT-00${id}`,
+    statusKey: "confirmed",
+    statusLabel: "Em acompanhamento",
+  };
+
+  const [fetchedPatient, setFetchedPatient] = useState(null);
+
+  useEffect(() => {
+    let ativo = true;
+    async function carregarPacienteReal() {
+      if (statePatient || !UUID_REGEX.test(String(id || ""))) return;
+      try {
+        let token = obterToken() || (await garantirSessaoValida());
+        let resp = await fetch(`${API_URL}/api/v1/pacientes/${id}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (resp.status === 401) {
+          removerToken();
+          token = await garantirSessaoValida();
+          if (token) {
+            resp = await fetch(`${API_URL}/api/v1/pacientes/${id}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+          }
+        }
+        if (!ativo || !resp.ok) return;
+        const data = await resp.json();
+        const nome = String(data?.nome_completo || data?.nome || "").trim();
+        if (nome) {
+          setFetchedPatient({
+            name: nome,
+            initials: obterIniciais(nome),
+            specialty: "Fonoaudiologia",
+            modality: "Presencial",
+            code: `PRT-${String(id).slice(0, 6).toUpperCase()}`,
+            statusKey: "confirmed",
+            statusLabel: "Em acompanhamento",
+          });
+        }
+      } catch {
+        /* mantém fallback */
+      }
+    }
+    carregarPacienteReal();
+    return () => {
+      ativo = false;
+    };
+  }, [id, statePatient]);
+
+  const patient = statePatient || fetchedPatient || fallbackSample;
+  const recordCode =
+    patient.code ||
+    (UUID_REGEX.test(String(id || ""))
+      ? `PRT-${String(id).slice(0, 6).toUpperCase()}`
+      : `PRT-00${id}`);
 
   const [activeSection, setActiveSection] = useState("anamnese");
   const [anamnese, setAnamnese] = useState("");
@@ -233,17 +320,16 @@ export default function Prontuario() {
     <div className="page-stack">
       <section className="patient-overview">
         <div className="patient-overview-main">
-          <div className="patient-large-avatar">{patient.initials}</div>
+          <div className="patient-large-avatar doctor-uniform-avatar">
+            {patient.initials}
+          </div>
 
           <div>
             <div className="patient-name-row">
               <h3>{patient.name}</h3>
-              <span className="status-pill status-confirmed">
-                Em acompanhamento
-              </span>
             </div>
 
-            <p>Prontuário #PRT-00{id} · Cadastro ativo</p>
+            <p>Prontuário #{recordCode} · Cadastro ativo</p>
 
             <div className="patient-metadata">
               <span>{patient.specialty}</span>
@@ -451,7 +537,7 @@ export default function Prontuario() {
 
               <div className="detail-row">
                 <span>Prontuário</span>
-                <strong>#PRT-00{id}</strong>
+                <strong>#{recordCode}</strong>
               </div>
             </div>
           </Card>
