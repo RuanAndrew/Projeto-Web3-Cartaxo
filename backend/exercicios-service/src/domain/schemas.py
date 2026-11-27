@@ -1,15 +1,24 @@
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional
+
 
 # --- SCHEMAS DE EXERCÍCIO ---
 class ExercicioBase(BaseModel):
     nome: str
+    categoria: str
     descricao: str
-    link_video: Optional[str] = None
+    instrucoes: str
+    url_midia: Optional[str] = None
+
 
 class ExercicioCreate(ExercicioBase):
     pass
+
+
+class ExercicioUpdate(ExercicioBase):
+    pass
+
 
 class ExercicioResponse(ExercicioBase):
     id: int
@@ -24,8 +33,10 @@ class PrescricaoBase(BaseModel):
     exercicio_id: int
     frequencia: str
 
+
 class PrescricaoCreate(PrescricaoBase):
     pass
+
 
 class PrescricaoResponse(PrescricaoBase):
     id: int
@@ -42,8 +53,10 @@ class RegistroRealizacaoBase(BaseModel):
     nivel_dor: Optional[int] = None
     observacoes: Optional[str] = None
 
+
 class RegistroRealizacaoCreate(RegistroRealizacaoBase):
     pass
+
 
 class RegistroRealizacaoResponse(RegistroRealizacaoBase):
     id: int

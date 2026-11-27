@@ -13,14 +13,14 @@ app = FastAPI(
     description="Microsserviço responsável pelo gerenciamento e acompanhamento de exercícios prescritos."
 )
 
-# Configuração do CORS para permitir que qualquer Frontend se conecte
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Em produção, restringe-se ao domínio do frontend
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 @app.get("/")
 def root():
@@ -37,9 +37,47 @@ def criar_exercicio(exercicio: schemas.ExercicioCreate, db: Session = Depends(ge
     db.refresh(db_exercicio)
     return db_exercicio
 
+
 @app.get("/exercicios", response_model=List[schemas.ExercicioResponse])
 def listar_exercicios(db: Session = Depends(get_db)):
-    return db.query(models.Exercicio).all()
+    return db.query(models.Exercicio).order_by(models.Exercicio.id.desc()).all()
+
+
+@app.get("/exercicios/{exercicio_id}", response_model=schemas.ExercicioResponse)
+def obter_exercicio(exercicio_id: int, db: Session = Depends(get_db)):
+    exercicio = db.query(models.Exercicio).filter(models.Exercicio.id == exercicio_id).first()
+    if not exercicio:
+        raise HTTPException(status_code=404, detail="Exercício não encontrado.")
+    return exercicio
+
+
+@app.put("/exercicios/{exercicio_id}", response_model=schemas.ExercicioResponse)
+def atualizar_exercicio(
+    exercicio_id: int,
+    dados: schemas.ExercicioUpdate,
+    db: Session = Depends(get_db)
+):
+    exercicio = db.query(models.Exercicio).filter(models.Exercicio.id == exercicio_id).first()
+    if not exercicio:
+        raise HTTPException(status_code=404, detail="Exercício não encontrado.")
+
+    for campo, valor in dados.model_dump().items():
+        setattr(exercicio, campo, valor)
+
+    db.commit()
+    db.refresh(exercicio)
+    return exercicio
+
+
+@app.delete("/exercicios/{exercicio_id}", status_code=status.HTTP_204_NO_CONTENT)
+def excluir_exercicio(exercicio_id: int, db: Session = Depends(get_db)):
+    exercicio = db.query(models.Exercicio).filter(models.Exercicio.id == exercicio_id).first()
+    if not exercicio:
+        raise HTTPException(status_code=404, detail="Exercício não encontrado.")
+
+    db.delete(exercicio)
+    db.commit()
+    return None
 
 
 # --- 2. PRESCRIÇÕES ---
@@ -55,6 +93,7 @@ def criar_prescricao(prescricao: schemas.PrescricaoCreate, db: Session = Depends
     db.commit()
     db.refresh(db_prescricao)
     return db_prescricao
+
 
 @app.get("/prescricoes/paciente/{paciente_id}", response_model=List[schemas.PrescricaoResponse])
 def listar_prescricoes_paciente(paciente_id: int, db: Session = Depends(get_db)):
@@ -77,6 +116,7 @@ def registrar_realizacao(registro: schemas.RegistroRealizacaoCreate, db: Session
     db.commit()
     db.refresh(db_registro)
     return db_registro
+
 
 @app.get("/registros/prescricao/{prescricao_id}", response_model=List[schemas.RegistroRealizacaoResponse])
 def listar_registros_prescricao(prescricao_id: int, db: Session = Depends(get_db)):
