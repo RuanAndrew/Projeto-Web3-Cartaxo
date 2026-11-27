@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     agendamento_service_url: str = "http://agendamento-service:8000"
     pacientes_service_url: str = "http://pacientes-service:8000"
     prontuario_service_url: str = "http://prontuario-service:8000"
+    exercicios_service_url: str = "http://exercicios-service:8000"
 
     # Origens do frontend permitidas pelo navegador (separadas por vírgula).
     cors_origins: str = "http://localhost:5173"
