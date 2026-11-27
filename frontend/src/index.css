@@ -7674,3 +7674,213 @@ p {
     grid-template-columns: 1fr;
   }
 }
+
+/* =========================================================
+   TELA DEDICADA DE HISTÓRICO E PRÓXIMAS CONSULTAS (MÉDICO)
+   ========================================================= */
+
+.doctor-sidebar-history-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #d8e2f0;
+}
+
+.doctor-history-quick-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #dbe4f3;
+  border-radius: 10px;
+  background: #f8fafd;
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.doctor-history-quick-btn:hover {
+  background: #eff6ff;
+  border-color: #93b4f8;
+  color: #1d4ed8;
+}
+
+.doctor-history-quick-btn strong {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #1e293b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.doctor-board-header-right {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.doctor-empty-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.history-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.history-mode-tab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border: 1px solid #dbe4f3;
+  border-radius: 12px;
+  background: #f8fafd;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.history-mode-tab:hover {
+  background: #ffffff;
+  border-color: #93b4f8;
+}
+
+.history-mode-tab-active {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.08);
+}
+
+.history-mode-tab-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.history-mode-tab-active .history-mode-tab-title {
+  color: #1d4ed8;
+}
+
+.history-mode-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #1e293b;
+  font-size: 12.5px;
+  font-weight: 800;
+}
+
+.history-mode-tab-active .history-mode-tab-badge {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.history-mode-tab small {
+  color: #64748b;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.history-kpi-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.history-filters-right {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.history-date-filter-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.history-date-input {
+  width: auto;
+  min-height: 40px;
+  height: 40px;
+  padding: 6px 11px;
+  font-size: 13.5px;
+}
+
+.history-date-groups-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.history-date-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.history-date-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #f1f5fb;
+  border: 1px solid #dbe4f3;
+  border-radius: 10px;
+}
+
+.history-date-group-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.history-date-group-title strong {
+  color: #1e293b;
+  font-size: 14px;
+  font-weight: 750;
+  text-transform: capitalize;
+}
+
+.history-date-pill {
+  padding: 3px 9px;
+  border-radius: 7px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #1d4ed8;
+  font-size: 12.5px;
+  font-weight: 800;
+}
+
+@media (max-width: 780px) {
+  .history-mode-tabs {
+    grid-template-columns: 1fr;
+  }
+}

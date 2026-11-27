@@ -25,6 +25,24 @@ const clinicalNavigation = [
     ),
   },
   {
+    label: "Consultas",
+    path: "/historico",
+    end: false,
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <polyline points="12 7 12 12 15 15" />
+      </svg>
+    ),
+  },
+  {
     label: "Prontuários",
     path: "/prontuarios",
     end: false,
@@ -77,9 +95,12 @@ export default function DoctorLayout() {
     ? "Prontuário eletrônico"
     : location.pathname === "/prontuarios"
       ? "Prontuários"
-    : location.pathname === "/pacientes"
-      ? "Pacientes"
-      : "Agenda clínica";
+      : location.pathname === "/historico" ||
+          location.pathname === "/agenda/historico"
+        ? "Consultas"
+        : location.pathname === "/pacientes"
+          ? "Pacientes"
+          : "Agenda clínica";
 
   const formattedDate = new Intl.DateTimeFormat("pt-BR", {
     weekday: "long",

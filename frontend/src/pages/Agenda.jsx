@@ -394,6 +394,18 @@ function ehAgendamentoDeDataPassada(dataHora) {
   return dataAg < obterHojeLocalIso();
 }
 
+function ehAgendamentoDeHoje(dataHora) {
+  const dataAg = obterDataLocalIso(dataHora);
+  if (!dataAg) return false;
+  return dataAg === obterHojeLocalIso();
+}
+
+function ehAgendamentoFuturo(dataHora) {
+  const dataAg = obterDataLocalIso(dataHora);
+  if (!dataAg) return false;
+  return dataAg > obterHojeLocalIso();
+}
+
 function minutosDoDiaLocal(dataHora) {
   if (!dataHora) return 0;
   const d = new Date(dataHora);
@@ -589,13 +601,6 @@ export default function Agenda() {
             ? { ...apt, status: "cancelado", canceladoPorPrazo: true }
             : apt
         );
-        const msg =
-          vencidosPendentes.length === 1
-            ? `1 consulta de data anterior (${formatDateShort(
-                vencidosPendentes[0].data_hora
-              )}) não foi iniciada no dia agendado, foi cancelada automaticamente e não pode ser retomada.`
-            : `${vencidosPendentes.length} consultas de datas anteriores não foram iniciadas no dia agendado, foram canceladas automaticamente e não podem ser retomadas.`;
-        setAvisoExpirados(msg);
       }
 
       setAppointments(listaNormalizada);
@@ -844,6 +849,8 @@ export default function Agenda() {
   const enrichedAppointments = useMemo(() => {
     return appointments.map((apt) => {
       const dataPassada = ehAgendamentoDeDataPassada(apt.data_hora);
+      const ehHoje = ehAgendamentoDeHoje(apt.data_hora);
+      const dataFutura = ehAgendamentoFuturo(apt.data_hora);
       const statusNormalizado =
         dataPassada &&
         (apt.status === "agendado" || apt.status === "aguardando")
@@ -862,6 +869,8 @@ export default function Agenda() {
         ...apt,
         status: statusNormalizado,
         dataPassada,
+        ehHoje,
+        dataFutura,
         statusInfo,
         isTeleconsulta,
         pacienteInfo: {
@@ -875,45 +884,62 @@ export default function Agenda() {
     });
   }, [appointments, pacientesMap, profissionaisMap]);
 
+  // Na tela principal de Agenda, exibimos SOMENTE os pacientes agendados para o dia atual (hoje)
+  const todayAppointments = useMemo(() => {
+    return enrichedAppointments.filter((apt) => apt.ehHoje);
+  }, [enrichedAppointments]);
+
+  const otherDaysCounts = useMemo(() => {
+    let past = 0;
+    let future = 0;
+    for (const apt of enrichedAppointments) {
+      if (apt.dataPassada) past += 1;
+      else if (apt.dataFutura) future += 1;
+    }
+    return { past, future, total: past + future };
+  }, [enrichedAppointments]);
+
   const visibleAppointments = useMemo(() => {
     const search = query.trim().toLowerCase();
 
-    return enrichedAppointments.filter((appointment) => {
-      const { statusInfo, pacienteInfo } = appointment;
+    return todayAppointments
+      .filter((appointment) => {
+        const { statusInfo, pacienteInfo } = appointment;
 
-      const matchesSearch =
-        !search ||
-        pacienteInfo.nome.toLowerCase().includes(search) ||
-        pacienteInfo.especialidade.toLowerCase().includes(search) ||
-        pacienteInfo.modalidadeLabel.toLowerCase().includes(search) ||
-        statusInfo.label.toLowerCase().includes(search);
+        const matchesSearch =
+          !search ||
+          pacienteInfo.nome.toLowerCase().includes(search) ||
+          pacienteInfo.especialidade.toLowerCase().includes(search) ||
+          pacienteInfo.modalidadeLabel.toLowerCase().includes(search) ||
+          statusInfo.label.toLowerCase().includes(search);
 
-      const isPending =
-        statusInfo.key === "confirmed" || statusInfo.key === "waiting";
-      const isCancelledOrNoShow =
-        statusInfo.key === "cancelled" || statusInfo.key === "noshow";
+        const isPending =
+          statusInfo.key === "confirmed" || statusInfo.key === "waiting";
+        const isCancelledOrNoShow =
+          statusInfo.key === "cancelled" || statusInfo.key === "noshow";
 
-      const matchesFilter =
-        filter === "Todas" ||
-        (filter === "Pendentes" && isPending) ||
-        (filter === "Concluídas" && statusInfo.key === "completed") ||
-        (filter === "Canceladas" && isCancelledOrNoShow);
+        const matchesFilter =
+          filter === "Todas" ||
+          (filter === "Pendentes" && isPending) ||
+          (filter === "Concluídas" && statusInfo.key === "completed") ||
+          (filter === "Canceladas" && isCancelledOrNoShow);
 
-      return matchesSearch && matchesFilter;
-    }).sort((a, b) => {
-      const diffHorario =
-        minutosDoDiaLocal(a.data_hora) - minutosDoDiaLocal(b.data_hora);
-      if (diffHorario !== 0) return diffHorario;
-      return new Date(a.data_hora).getTime() - new Date(b.data_hora).getTime();
-    });
-  }, [enrichedAppointments, query, filter]);
+        return matchesSearch && matchesFilter;
+      })
+      .sort((a, b) => {
+        const diffHorario =
+          minutosDoDiaLocal(a.data_hora) - minutosDoDiaLocal(b.data_hora);
+        if (diffHorario !== 0) return diffHorario;
+        return new Date(a.data_hora).getTime() - new Date(b.data_hora).getTime();
+      });
+  }, [todayAppointments, query, filter]);
 
   const stats = useMemo(() => {
     let pending = 0;
     let completed = 0;
     let cancelled = 0;
 
-    for (const apt of enrichedAppointments) {
+    for (const apt of todayAppointments) {
       if (apt.statusInfo.key === "completed") completed += 1;
       else if (
         apt.statusInfo.key === "cancelled" ||
@@ -928,13 +954,13 @@ export default function Agenda() {
       activeTotal > 0 ? Math.round((completed / activeTotal) * 100) : 0;
 
     return {
-      total: enrichedAppointments.length,
+      total: todayAppointments.length,
       pending,
       completed,
       cancelled,
       progressPercent,
     };
-  }, [enrichedAppointments]);
+  }, [todayAppointments]);
 
   function handleNewAppointment() {
     const defaultProfId =
@@ -947,6 +973,7 @@ export default function Agenda() {
     setFormData({
       ...initialFormData,
       profissional_id: defaultProfId,
+      data: obterHojeLocalIso(),
     });
     setShowForm((prev) => !prev);
   }
@@ -1441,8 +1468,27 @@ export default function Agenda() {
           </div>
 
           <div className="doctor-day-total-bar">
-            <span>Total programado na agenda</span>
+            <span>Total programado hoje</span>
             <strong>{stats.total} consulta(s)</strong>
+          </div>
+
+          <div className="doctor-sidebar-history-links">
+            <button
+              type="button"
+              className="doctor-history-quick-btn"
+              onClick={() => navigate("/historico?aba=futuro")}
+            >
+              <span>📅 Próximos agendamentos</span>
+              <strong>{otherDaysCounts.future}</strong>
+            </button>
+            <button
+              type="button"
+              className="doctor-history-quick-btn"
+              onClick={() => navigate("/historico?aba=historico")}
+            >
+              <span>🕘 Histórico</span>
+              <strong>{otherDaysCounts.past}</strong>
+            </button>
           </div>
         </section>
       </aside>
@@ -1579,15 +1625,27 @@ export default function Agenda() {
           <header className="doctor-schedule-board-header">
             <div className="doctor-schedule-title-row">
               <div>
-                <h2 className="card-title">Programação de Pacientes</h2>
-                <p className="doctor-schedule-subtitle">
-                  Pacientes agendados para atendimento presencial e teleconsulta
-                </p>
+                <h2 className="card-title">Programação de Hoje</h2>
               </div>
 
-              <span className="records-count-badge">
-                {visibleAppointments.length} atendimento(s)
-              </span>
+              <div className="doctor-board-header-right">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline"
+                  onClick={() =>
+                    navigate(
+                      otherDaysCounts.future > 0
+                        ? "/historico?aba=futuro"
+                        : "/historico?aba=historico"
+                    )
+                  }
+                >
+                  📅 Ver consultas ({otherDaysCounts.total})
+                </button>
+                <span className="records-count-badge">
+                  {visibleAppointments.length} atendimento(s) hoje
+                </span>
+              </div>
             </div>
 
             <div className="doctor-schedule-controls">
@@ -1661,24 +1719,53 @@ export default function Agenda() {
             </div>
           ) : visibleAppointments.length === 0 ? (
             <div className="empty-state">
-              <span className="empty-state-icon">⌕</span>
-              <strong>Nenhum paciente nesta visualização</strong>
+              <span className="empty-state-icon">📅</span>
+              <strong>
+                {todayAppointments.length === 0
+                  ? `Nenhum paciente agendado para hoje (${formatDateShort(
+                      new Date()
+                    )})`
+                  : "Nenhum paciente nesta visualização"}
+              </strong>
               <p>
-                Não há atendimentos correspondentes ao filtro selecionado no
-                momento.
+                {todayAppointments.length === 0
+                  ? "A fila de hoje está livre. Você pode marcar uma consulta para hoje ou consultar o histórico e os agendamentos futuros."
+                  : "Não há atendimentos de hoje correspondentes ao filtro selecionado."}
               </p>
-              {(query || filter !== "Todas") && (
-                <Btn
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    setQuery("");
-                    setFilter("Todas");
-                  }}
-                >
-                  Mostrar todos os agendamentos
-                </Btn>
-              )}
+              <div className="doctor-empty-actions-row">
+                {(query || filter !== "Todas") && todayAppointments.length > 0 && (
+                  <Btn
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setQuery("");
+                      setFilter("Todas");
+                    }}
+                  >
+                    Mostrar todos de hoje
+                  </Btn>
+                )}
+
+                {otherDaysCounts.past > 0 && (
+                  <Btn
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate("/historico?aba=historico")}
+                  >
+                    🕘 Ver histórico ({otherDaysCounts.past})
+                  </Btn>
+                )}
+
+                {otherDaysCounts.future > 0 && (
+                  <Btn
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate("/historico?aba=futuro")}
+                  >
+                    📅 Ver consultas futuras ({otherDaysCounts.future})
+                  </Btn>
+                )}
+              </div>
             </div>
           ) : (
             <div className="doctor-patient-stack">

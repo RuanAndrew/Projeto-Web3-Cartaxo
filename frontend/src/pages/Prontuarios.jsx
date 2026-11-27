@@ -626,10 +626,6 @@ export default function Prontuarios() {
           <div className="doctor-schedule-title-row">
             <div>
               <h2 className="card-title">Prontuários de Pacientes</h2>
-              <p className="doctor-schedule-subtitle">
-                Busque por nome, CPF, código ou filtre por especialidade e letra
-                inicial
-              </p>
             </div>
 
             <div className="records-header-badges">

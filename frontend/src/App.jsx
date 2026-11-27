@@ -10,6 +10,7 @@ import { ToastProvider } from "./components/ToastProvider.jsx";
 
 import Login from "./pages/Login.jsx";
 import Agenda from "./pages/Agenda.jsx";
+import HistoricoAgenda from "./pages/HistoricoAgenda.jsx";
 import Prontuario from "./pages/Prontuario.jsx";
 import Prontuarios from "./pages/Prontuarios.jsx";
 import Portal from "./pages/Portal.jsx";
@@ -53,6 +54,8 @@ export default function App() {
 
           <Route element={<DoctorLayout />}>
             <Route path="/agenda" element={<Agenda />} />
+            <Route path="/historico" element={<HistoricoAgenda />} />
+            <Route path="/agenda/historico" element={<HistoricoAgenda />} />
             <Route
               path="/prontuarios"
               element={<Prontuarios />}
