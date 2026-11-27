@@ -28,6 +28,7 @@ def rotas() -> Dict[str, str]:
         "agendamentos": settings.agendamento_service_url,
         "api": settings.pacientes_service_url,
         "prontuarios": settings.prontuario_service_url,
+        "exercicios": settings.exercicios_service_url,
 
     }
 
